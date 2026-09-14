@@ -217,7 +217,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-
               const Text(
                 'Create your Go Fren account',
                 textAlign: TextAlign.center,
@@ -226,9 +225,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-
               const SizedBox(height: 8),
-
               const Text(
                 'Join Go Fren and meet new people.',
                 textAlign: TextAlign.center,
@@ -236,9 +233,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   color: Colors.grey,
                 ),
               ),
-
               const SizedBox(height: 30),
-
               TextField(
                 decoration: InputDecoration(
                   labelText: 'Name',
@@ -248,9 +243,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
@@ -261,9 +254,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 obscureText: true,
                 decoration: InputDecoration(
@@ -274,9 +265,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 keyboardType: TextInputType.datetime,
                 decoration: InputDecoration(
@@ -288,9 +277,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               DropdownButtonFormField<String>(
                 decoration: InputDecoration(
                   labelText: 'Gender',
@@ -315,9 +302,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ],
                 onChanged: (value) {},
               ),
-
               const SizedBox(height: 16),
-
               TextField(
                 decoration: InputDecoration(
                   labelText: 'City',
@@ -327,9 +312,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 12),
-
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: is18Plus,
@@ -343,15 +326,228 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: is18Plus
+                      ? () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ProfileSetupScreen(),
+                            ),
+                          );
+                        }
+                      : null,
+                  child: const Text(
+                    'CONTINUE',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+                child: const Text('Already have an account? Log In'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class ProfileSetupScreen extends StatefulWidget {
+  const ProfileSetupScreen({super.key});
+
+  @override
+  State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
+}
+
+class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
+  final TextEditingController bioController = TextEditingController();
+  final TextEditingController cityController = TextEditingController();
+
+  final List<String> interests = [
+    'Music',
+    'Movies',
+    'Travel',
+    'Sports',
+    'Gaming',
+    'Books',
+    'Food',
+    'Photography',
+  ];
+
+  final Set<String> selectedInterests = {};
+
+  @override
+  void dispose() {
+    bioController.dispose();
+    cityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Complete Your Profile'),
+        centerTitle: true,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+
+              const Text(
+                'Make your profile stand out',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Add a photo, bio, and interests so people can get to know you.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 65,
+                      backgroundColor: Colors.deepPurple.shade50,
+                      child: const Icon(
+                        Icons.person,
+                        size: 70,
+                        color: Colors.deepPurple,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.deepPurple,
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                          onPressed: () {},
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 30),
+
+              TextField(
+                controller: cityController,
+                decoration: InputDecoration(
+                  labelText: 'City',
+                  hintText: 'Enter your city',
+                  prefixIcon: const Icon(Icons.location_city_outlined),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
 
               const SizedBox(height: 16),
+
+              TextField(
+                controller: bioController,
+                maxLines: 4,
+                maxLength: 160,
+                decoration: InputDecoration(
+                  labelText: 'About you',
+                  hintText: 'Tell people a little about yourself...',
+                  alignLabelWithHint: true,
+                  prefixIcon: const Padding(
+                    padding: EdgeInsets.only(bottom: 70),
+                    child: Icon(Icons.edit_note),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              const Text(
+                'Your interests',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              const Text(
+                'Choose a few things you enjoy.',
+                style: TextStyle(
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: interests.map((interest) {
+                  final selected = selectedInterests.contains(interest);
+
+                  return FilterChip(
+                    label: Text(interest),
+                    selected: selected,
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          selectedInterests.add(interest);
+                        } else {
+                          selectedInterests.remove(interest);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 30),
 
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: is18Plus ? () {} : null,
+                  onPressed: () {},
                   child: const Text(
-                    'CREATE ACCOUNT',
+                    'SAVE PROFILE',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -366,7 +562,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onPressed: () {
                   Navigator.pop(context);
                 },
-                child: const Text('Already have an account? Log In'),
+                child: const Text('Back'),
               ),
             ],
           ),

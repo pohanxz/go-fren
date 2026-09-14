@@ -449,7 +449,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: gender,
+                initialValue: gender,
                 decoration: const InputDecoration(
                   labelText: 'Gender',
                   prefixIcon: Icon(Icons.wc_outlined),
@@ -894,7 +894,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       Image.network(
                         profile.imageUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
+                        errorBuilder: (context, error, stackTrace) {
                           return Container(
                             color: Colors.grey.shade300,
                             child: const Icon(
@@ -1065,7 +1065,7 @@ class ProfileDetailScreen extends StatelessWidget {
               background: Image.network(
                 profile.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
+                errorBuilder: (context, error, stackTrace) {
                   return Container(
                     color: Colors.grey.shade300,
                     child: const Icon(Icons.person, size: 100),

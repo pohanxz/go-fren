@@ -1419,11 +1419,129 @@ class ProfileDetailScreen extends StatelessWidget {
 // MATCHES
 // ============================================================
 
-class MatchesScreen extends StatelessWidget {
+class MatchesScreen extends StatefulWidget {
   const MatchesScreen({super.key});
 
   @override
+  State<MatchesScreen> createState() => _MatchesScreenState();
+}
+
+class _MatchesScreenState extends State<MatchesScreen> {
+  List<Profile> matches = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadMatches();
+  }
+
+  Future<void> loadMatches() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('matches')
+          .select('user_id, matched_user_id')
+          .or('user_id.eq.${user.id},matched_user_id.eq.${user.id}');
+
+      final matchIds = <String>[];
+
+      for (final item in response as List) {
+        final matchUserId = item['user_id'] == user.id
+            ? item['matched_user_id'] as String
+            : item['user_id'] as String;
+
+        matchIds.add(matchUserId);
+      }
+
+      if (matchIds.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          matches = [];
+          isLoading = false;
+        });
+        return;
+      }
+
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('id, name, bio, birth_date, city, avatar_url')
+          .inFilter('id', matchIds);
+
+      final loadedMatches = <Profile>[];
+
+      for (final item in profileResponse as List) {
+        final birthDateText = item['birth_date'] as String?;
+        final birthDate = birthDateText != null
+            ? DateTime.tryParse(birthDateText)
+            : null;
+
+        if (birthDate == null) continue;
+
+        final now = DateTime.now();
+        var age = now.year - birthDate.year;
+
+        if (now.month < birthDate.month ||
+            (now.month == birthDate.month && now.day < birthDate.day)) {
+          age--;
+        }
+
+        loadedMatches.add(
+          Profile(
+            id: item['id'] as String,
+            name: item['name'] as String? ?? 'Unknown',
+            age: age,
+            city: item['city'] as String? ?? '',
+            bio: item['bio'] as String? ?? '',
+            imageUrl: item['avatar_url'] as String? ?? '',
+            interests: const [],
+          ),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        matches = loadedMatches;
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load matches.'),
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (matches.isEmpty) {
+      return const Center(
+        child: Text(
+          'No matches yet.',
+          style: TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -1431,23 +1549,17 @@ class MatchesScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      body: ListView(
+      body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        children: [
-          _matchCard(
-            context,
-            demoProfiles[0],
-          ),
-          _matchCard(
-            context,
-            demoProfiles[1],
-          ),
-        ],
+        itemCount: matches.length,
+        itemBuilder: (context, index) {
+          return matchCard(context, matches[index]);
+        },
       ),
     );
   }
 
-  Widget _matchCard(BuildContext context, Profile profile) {
+  Widget matchCard(BuildContext context, Profile profile) {
     return Card(
       color: Colors.white,
       elevation: 1,
@@ -1456,7 +1568,12 @@ class MatchesScreen extends StatelessWidget {
         contentPadding: const EdgeInsets.all(10),
         leading: CircleAvatar(
           radius: 30,
-          backgroundImage: NetworkImage(profile.imageUrl),
+          backgroundImage: profile.imageUrl.isNotEmpty
+              ? NetworkImage(profile.imageUrl)
+              : null,
+          child: profile.imageUrl.isEmpty
+              ? const Icon(Icons.person)
+              : null,
         ),
         title: Text(
           '${profile.name}, ${profile.age}',
@@ -1481,10 +1598,6 @@ class MatchesScreen extends StatelessWidget {
     );
   }
 }
-
-// ============================================================
-// CHATS
-// ============================================================
 
 class ChatsScreen extends StatelessWidget {
   const ChatsScreen({super.key});

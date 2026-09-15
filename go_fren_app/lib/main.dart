@@ -1556,14 +1556,34 @@ class _ChatScreenState extends State<ChatScreen> {
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  void logout(BuildContext context) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const LoginScreen(),
-      ),
-      (route) => false,
-    );
+  Future<void> logout(BuildContext context) async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+
+      if (!context.mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        ),
+        (route) => false,
+      );
+    } on AuthException catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Logout failed. Please try again.'),
+        ),
+      );
+    }
   }
 
   void showReportDialog(BuildContext context) {

@@ -206,11 +206,36 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void login() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainNavigation()),
-    );
+  Future<void> login() async {
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text,
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const MainNavigation(),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Login failed. Please try again.'),
+        ),
+      );
+    }
   }
 
   @override

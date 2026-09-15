@@ -58,6 +58,7 @@ class GoFrenApp extends StatelessWidget {
 // ============================================================
 
 class Profile {
+  final String? id;
   final String name;
   final int age;
   final String city;
@@ -66,6 +67,7 @@ class Profile {
   final List<String> interests;
 
   const Profile({
+    this.id,
     required this.name,
     required this.age,
     required this.city,
@@ -976,6 +978,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
         loadedProfiles.add(
           Profile(
+          id: id,
             name: item['name'] as String? ?? 'Unknown',
             age: age,
             city: item['city'] as String? ?? '',
@@ -1016,23 +1019,59 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
   }
 
-  void like() {
+  Future<void> like() async {
+    final user = Supabase.instance.client.auth.currentUser;
     final profile = profiles[currentProfile];
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('You liked ${profile.name}!'),
-        duration: const Duration(milliseconds: 900),
-      ),
-    );
+    if (user == null || profile.id == null) {
+      return;
+    }
 
-    setState(() {
-      if (currentProfile < profiles.length - 1) {
-        currentProfile++;
+    try {
+      await Supabase.instance.client.from('likes').insert({
+        'user_id': user.id,
+        'liked_user_id': profile.id,
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You liked ${profile.name}!'),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+
+      setState(() {
+        if (currentProfile < profiles.length - 1) {
+          currentProfile++;
+        } else {
+          currentProfile = 0;
+        }
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == '23505') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You already liked this profile.'),
+          ),
+        );
       } else {
-        currentProfile = 0;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
       }
-    });
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send like. Please try again.'),
+        ),
+      );
+    }
   }
 
   @override

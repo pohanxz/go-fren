@@ -373,7 +373,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  void continueRegistration() {
+  Future<void> continueRegistration() async {
     if (!is18Plus) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

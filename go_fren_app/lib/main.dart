@@ -1394,8 +1394,53 @@ class ProfileDetailScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
+                      onPressed: () async {
+                        final user =
+                            Supabase.instance.client.auth.currentUser;
+
+                        if (user == null || profile.id == null) return;
+
+                        try {
+                          await Supabase.instance.client.from('likes').insert({
+                            'user_id': user.id,
+                            'liked_user_id': profile.id,
+                          });
+
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('You liked ${profile.name}!'),
+                              duration: const Duration(milliseconds: 900),
+                            ),
+                          );
+
+                          Navigator.pop(context);
+                        } on PostgrestException catch (e) {
+                          if (!context.mounted) return;
+
+                          if (e.code == '23505') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'You already liked this profile.',
+                                ),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message)),
+                            );
+                          }
+                        } catch (_) {
+                          if (!context.mounted) return;
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to like profile.'),
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.favorite),
                       label: const Text('LIKE'),
@@ -1409,6 +1454,188 @@ class ProfileDetailScreen extends StatelessWidget {
               ),
             ),
           ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final user = Supabase.instance.client.auth.currentUser;
+
+                  if (user == null || profile.id == null) return;
+
+                  try {
+                    await Supabase.instance.client.from('blocks').insert({
+                      'blocker_id': user.id,
+                      'blocked_id': profile.id,
+                    });
+
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Profile blocked.'),
+                      ),
+                    );
+
+                    Navigator.pop(context);
+                  } on PostgrestException catch (e) {
+                    if (!context.mounted) return;
+
+                    if (e.code == '23505') {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('This profile is already blocked.'),
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(e.message)),
+                      );
+                    }
+                  } catch (_) {
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to block profile.'),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.block),
+                label: const Text('BLOCK'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final user = Supabase.instance.client.auth.currentUser;
+
+                  if (user == null || profile.id == null) return;
+
+                  final reasonController = TextEditingController();
+                  String selectedReason = 'Inappropriate behavior';
+
+                  final shouldReport = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) {
+                      return StatefulBuilder(
+                        builder: (context, setDialogState) {
+                          return AlertDialog(
+                            title: const Text('Report Profile'),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                DropdownButtonFormField<String>(
+                                  initialValue: selectedReason,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Reason',
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'Inappropriate behavior',
+                                      child: Text('Inappropriate behavior'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Fake profile',
+                                      child: Text('Fake profile'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Harassment',
+                                      child: Text('Harassment'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Spam',
+                                      child: Text('Spam'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Other',
+                                      child: Text('Other'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setDialogState(() {
+                                        selectedReason = value;
+                                      });
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: reasonController,
+                                  maxLines: 3,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Details (optional)',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(dialogContext, false);
+                                },
+                                child: const Text('CANCEL'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.pop(dialogContext, true);
+                                },
+                                child: const Text('REPORT'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  );
+
+                  final details = reasonController.text.trim();
+                  reasonController.dispose();
+
+                  if (shouldReport != true) return;
+
+                  try {
+                    await Supabase.instance.client.from('reports').insert({
+                      'reporter_id': user.id,
+                      'reported_user_id': profile.id,
+                      'reason': selectedReason,
+                      'details': details,
+                    });
+
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Report submitted.'),
+                      ),
+                    );
+                  } on PostgrestException catch (e) {
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(e.message)),
+                    );
+                  } catch (_) {
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to submit report.'),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('REPORT'),
+              ),
+            ),
         ],
       ),
     );
@@ -1460,6 +1687,17 @@ class _MatchesScreenState extends State<MatchesScreen> {
 
         matchIds.add(matchUserId);
       }
+        final blockedResponse = await Supabase.instance.client
+            .from('blocks')
+            .select('blocked_id')
+            .eq('blocker_id', user.id);
+
+        final blockedIds = (blockedResponse as List)
+            .map((item) => item['blocked_id'] as String)
+            .toSet();
+
+        matchIds.removeWhere((id) => blockedIds.contains(id));
+
 
       if (matchIds.isEmpty) {
         if (!mounted) return;
@@ -1799,7 +2037,6 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
       messageController.clear();
-      await loadChat();
     } on PostgrestException catch (e) {
       if (!mounted) return;
 

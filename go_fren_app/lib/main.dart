@@ -418,6 +418,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         builder: (_) => ProfileSetupScreen(
           name: nameController.text,
           city: cityController.text,
+        birthDate: birthDate!,
+        gender: gender,
         ),
       ),
     );
@@ -574,11 +576,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 class ProfileSetupScreen extends StatefulWidget {
   final String name;
   final String city;
+  final DateTime birthDate;
+  final String? gender;
 
   const ProfileSetupScreen({
     super.key,
     required this.name,
     required this.city,
+    required this.birthDate,
+    required this.gender,
   });
 
   @override
@@ -615,15 +621,53 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     super.dispose();
   }
 
-  void saveProfile() {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const MainNavigation()),
-      (route) => false,
-    );
+  Future<void> saveProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session not found. Please log in again.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user.id,
+        'name': widget.name.trim(),
+        'bio': bioController.text.trim(),
+        'gender': widget.gender,
+        'birth_date': widget.birthDate.toIso8601String().split('T').first,
+        'city': cityController.text.trim(),
+      });
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainNavigation()),
+        (route) => false,
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save profile. Please try again.'),
+        ),
+      );
+    }
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(

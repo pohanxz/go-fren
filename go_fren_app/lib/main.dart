@@ -2353,11 +2353,99 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final nameController = TextEditingController(text: 'Ivan');
-  final cityController = TextEditingController(text: 'Jakarta');
-  final bioController = TextEditingController(
-    text: 'Love meeting new people and having good conversations.',
-  );
+  final nameController = TextEditingController();
+  final cityController = TextEditingController();
+  final bioController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from("profiles")
+          .select("name, city, bio")
+          .eq("id", user.id)
+          .maybeSingle();
+
+      if (response == null || !mounted) return;
+
+      setState(() {
+        nameController.text = response["name"] as String? ?? "";
+        cityController.text = response["city"] as String? ?? "";
+        bioController.text = response["bio"] as String? ?? "";
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to load profile."),
+        ),
+      );
+    }
+  }
+
+  Future<void> saveProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    final name = nameController.text.trim();
+    final city = cityController.text.trim();
+    final bio = bioController.text.trim();
+
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Name cannot be empty.")),
+      );
+      return;
+    }
+
+    try {
+      await Supabase.instance.client.from("profiles").update({
+        "name": name,
+        "city": city,
+        "bio": bio,
+        "updated_at": DateTime.now().toIso8601String(),
+      }).eq("id", user.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Profile updated.")),
+      );
+
+      Navigator.pop(context);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Failed to update profile."),
+        ),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -2374,14 +2462,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         title: const Text('Edit Profile'),
         actions: [
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Profile updated.'),
-                ),
-              );
-            },
+          onPressed: saveProfile,
             child: const Text('SAVE'),
           ),
         ],

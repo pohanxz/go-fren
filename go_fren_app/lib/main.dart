@@ -919,10 +919,96 @@ class DiscoveryScreen extends StatefulWidget {
 
 class _DiscoveryScreenState extends State<DiscoveryScreen> {
   int currentProfile = 0;
+  List<Profile> profiles = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfiles();
+  }
+
+  Future<void> loadProfiles() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final blockedResponse = await Supabase.instance.client
+          .from('blocks')
+          .select('blocked_id')
+          .eq('blocker_id', user.id);
+
+      final blockedIds = (blockedResponse as List)
+          .map((item) => item['blocked_id'] as String)
+          .toSet();
+
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('id, name, bio, birth_date, city, avatar_url')
+          .neq('id', user.id);
+
+      final loadedProfiles = <Profile>[];
+
+      for (final item in response as List) {
+        final id = item['id'] as String;
+
+        if (blockedIds.contains(id)) continue;
+
+        final birthDateText = item['birth_date'] as String?;
+        final birthDate = birthDateText != null
+            ? DateTime.tryParse(birthDateText)
+            : null;
+
+        if (birthDate == null) continue;
+
+        final now = DateTime.now();
+        var age = now.year - birthDate.year;
+
+        if (now.month < birthDate.month ||
+            (now.month == birthDate.month && now.day < birthDate.day)) {
+          age--;
+        }
+
+        loadedProfiles.add(
+          Profile(
+            name: item['name'] as String? ?? 'Unknown',
+            age: age,
+            city: item['city'] as String? ?? '',
+            bio: item['bio'] as String? ?? '',
+            imageUrl: item['avatar_url'] as String? ?? '',
+            interests: const [],
+          ),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        profiles = loadedProfiles;
+        currentProfile = 0;
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load profiles.'),
+        ),
+      );
+    }
+  }
 
   void skip() {
     setState(() {
-      if (currentProfile < demoProfiles.length - 1) {
+      if (currentProfile < profiles.length - 1) {
         currentProfile++;
       } else {
         currentProfile = 0;
@@ -931,7 +1017,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   void like() {
-    final profile = demoProfiles[currentProfile];
+    final profile = profiles[currentProfile];
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -941,7 +1027,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     );
 
     setState(() {
-      if (currentProfile < demoProfiles.length - 1) {
+      if (currentProfile < profiles.length - 1) {
         currentProfile++;
       } else {
         currentProfile = 0;
@@ -951,7 +1037,22 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = demoProfiles[currentProfile];
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (profiles.isEmpty) {
+      return const Center(
+        child: Text(
+          'No profiles available right now.',
+          style: TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
+    final profile = profiles[currentProfile];
 
     return SafeArea(
       child: Column(

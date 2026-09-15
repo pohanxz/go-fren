@@ -383,6 +383,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    try {
+      final response = await Supabase.instance.client.auth.signUp(
+        email: emailController.text.trim(),
+        password: passwordController.text,
+      );
+
+      if (response.user == null) {
+        throw const AuthException('Registration failed.');
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration failed. Please try again.'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
     Navigator.push(
       context,
       MaterialPageRoute(

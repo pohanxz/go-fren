@@ -121,9 +121,15 @@ class _SplashScreenState extends State<SplashScreen> {
     Future.delayed(const Duration(seconds: 2), () {
       if (!mounted) return;
 
+      final session = Supabase.instance.client.auth.currentSession;
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        MaterialPageRoute(
+          builder: (_) => session != null
+              ? const MainNavigation()
+              : const LoginScreen(),
+        ),
       );
     });
   }

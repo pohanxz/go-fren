@@ -1685,11 +1685,16 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final messageController = TextEditingController();
+  final messages = <Map<String, dynamic>>[];
 
-  final messages = <String>[
-    'Hi! Nice to meet you 👋',
-    'Hey! Nice to meet you too!',
-  ];
+  String? matchId;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadChat();
+  }
 
   @override
   void dispose() {
@@ -1697,114 +1702,204 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void sendMessage() {
+  Future<void> loadChat() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final otherUserId = widget.profile.id;
+
+    if (user == null || otherUserId == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('matches')
+          .select('id, user_id, matched_user_id')
+          .or(
+            'and(user_id.eq.${user.id},matched_user_id.eq.$otherUserId),'
+            'and(user_id.eq.$otherUserId,matched_user_id.eq.${user.id})',
+          )
+          .maybeSingle();
+
+      if (response == null) {
+        if (!mounted) return;
+        setState(() => isLoading = false);
+        return;
+      }
+
+      matchId = response['id'] as String;
+
+      final messageResponse = await Supabase.instance.client
+          .from('messages')
+          .select('id, sender_id, message, created_at')
+          .eq('match_id', matchId!)
+          .order('created_at');
+
+      if (!mounted) return;
+
+      setState(() {
+        messages
+          ..clear()
+          ..addAll(
+            (messageResponse as List)
+                .map((item) => Map<String, dynamic>.from(item)),
+          );
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load chat.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> sendMessage() async {
     final text = messageController.text.trim();
+    final user = Supabase.instance.client.auth.currentUser;
 
-    if (text.isEmpty) return;
+    if (text.isEmpty || user == null || matchId == null) return;
 
-    setState(() {
-      messages.add(text);
+    try {
+      await Supabase.instance.client.from('messages').insert({
+        'match_id': matchId,
+        'sender_id': user.id,
+        'message': text,
+      });
+
       messageController.clear();
-    });
+      await loadChat();
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send message.'),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId =
+        Supabase.instance.client.auth.currentUser?.id;
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundImage:
-                  NetworkImage(widget.profile.imageUrl),
+              backgroundImage: widget.profile.imageUrl.isNotEmpty
+                  ? NetworkImage(widget.profile.imageUrl)
+                  : null,
+              child: widget.profile.imageUrl.isEmpty
+                  ? const Icon(Icons.person, size: 18)
+                  : null,
             ),
             const SizedBox(width: 10),
             Text(widget.profile.name),
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
-                final isMine = index % 2 == 1;
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: messages.isEmpty
+                      ? const Center(
+                          child: Text('No messages yet.'),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: messages.length,
+                          itemBuilder: (context, index) {
+                            final item = messages[index];
+                            final isMe =
+                                item['sender_id'] == currentUserId;
 
-                return Align(
-                  alignment:
-                      isMine ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 15,
-                      vertical: 11,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isMine
-                          ? const Color(0xFF6C5CE7)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Text(
-                      messages[index],
-                      style: TextStyle(
-                        color: isMine ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: messageController,
-                      decoration: InputDecoration(
-                        hintText: 'Write a message...',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(25),
-                          borderSide: BorderSide.none,
+                            return Align(
+                              alignment: isMe
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                margin:
+                                    const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMe
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.grey.shade200,
+                                  borderRadius:
+                                      BorderRadius.circular(16),
+                                ),
+                                child: Text(
+                                  item['message'] as String,
+                                  style: TextStyle(
+                                    color: isMe
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: messageController,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => sendMessage(),
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 16,
+                            ),
+                          ),
                         ),
                       ),
-                      onSubmitted: (_) => sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  CircleAvatar(
-                    radius: 25,
-                    backgroundColor: const Color(0xFF6C5CE7),
-                    child: IconButton(
-                      onPressed: sendMessage,
-                      icon: const Icon(
-                        Icons.send,
-                        color: Colors.white,
-                        size: 20,
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: sendMessage,
+                        icon: const Icon(Icons.send),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
 
-// ============================================================
-// SETTINGS
-// ============================================================
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

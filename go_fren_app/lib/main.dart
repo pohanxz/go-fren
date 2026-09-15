@@ -1688,6 +1688,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final messages = <Map<String, dynamic>>[];
 
   String? matchId;
+  RealtimeChannel? messagesChannel;
   bool isLoading = true;
 
   @override
@@ -1699,6 +1700,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     messageController.dispose();
+    messagesChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -1729,6 +1731,29 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       matchId = response['id'] as String;
+
+      messagesChannel = Supabase.instance.client
+          .channel('messages-$matchId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'match_id',
+              value: matchId!,
+            ),
+            callback: (payload) {
+              if (!mounted) return;
+
+              setState(() {
+                messages.add(
+                  Map<String, dynamic>.from(payload.newRecord),
+                );
+              });
+            },
+          )
+          .subscribe();
 
       final messageResponse = await Supabase.instance.client
           .from('messages')

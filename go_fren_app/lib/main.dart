@@ -2163,6 +2163,182 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 
+class BlockedUsersScreen extends StatefulWidget {
+  const BlockedUsersScreen({super.key});
+
+  @override
+  State<BlockedUsersScreen> createState() => BlockedUsersScreenState();
+}
+
+class BlockedUsersScreenState extends State<BlockedUsersScreen> {
+  List<Map<String, dynamic>> blockedUsers = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadBlockedUsers();
+  }
+
+  Future<void> loadBlockedUsers() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      final blockResponse = await Supabase.instance.client
+          .from('blocks')
+          .select('blocked_id')
+          .eq('blocker_id', user.id);
+
+      final blockedIds = (blockResponse as List)
+          .map((item) => item['blocked_id'] as String)
+          .toList();
+
+      if (blockedIds.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          blockedUsers = [];
+          isLoading = false;
+        });
+
+        return;
+      }
+
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('id, name, city, avatar_url')
+          .inFilter('id', blockedIds);
+
+      if (!mounted) return;
+
+      setState(() {
+        blockedUsers = (profileResponse as List)
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+        isLoading = false;
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load blocked users.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> unblockUser(String blockedId) async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('blocks')
+          .delete()
+          .eq('blocker_id', user.id)
+          .eq('blocked_id', blockedId);
+
+      if (!mounted) return;
+
+      await loadBlockedUsers();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User unblocked.'),
+        ),
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to unblock user.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Blocked Users',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : blockedUsers.isEmpty
+              ? const Center(
+                  child: Text('You have not blocked anyone.'),
+                )
+              : ListView.separated(
+                  itemCount: blockedUsers.length,
+                  separatorBuilder: (_, index) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final user = blockedUsers[index];
+                    final name = user['name'] as String? ?? 'Unknown';
+                    final city = user['city'] as String? ?? '';
+                    final avatarUrl = user['avatar_url'] as String?;
+
+                    return ListTile(
+                      leading: CircleAvatar(
+                        radius: 26,
+                        backgroundImage:
+                            avatarUrl != null && avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                        child: avatarUrl == null || avatarUrl.isEmpty
+                            ? const Icon(Icons.person)
+                            : null,
+                      ),
+                      title: Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: city.isEmpty ? null : Text(city),
+                      trailing: OutlinedButton(
+                        onPressed: () => unblockUser(user['id'] as String),
+                        child: const Text('UNBLOCK'),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+}
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -2307,7 +2483,14 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.block),
             title: const Text('Block a user'),
-            onTap: () => showBlockDialog(context),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const BlockedUsersScreen(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.flag_outlined),
@@ -2341,7 +2524,6 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-// ============================================================
 // EDIT PROFILE
 // ============================================================
 

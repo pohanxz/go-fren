@@ -2742,6 +2742,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   );
 
   XFile? selectedImage;
+  String? existingAvatarUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('name, city, bio, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (response == null || !mounted) return;
+
+      setState(() {
+        nameController.text = response['name']?.toString() ?? '';
+        cityController.text = response['city']?.toString() ?? '';
+        bioController.text = response['bio']?.toString() ?? '';
+        existingAvatarUrl = response['avatar_url']?.toString();
+      });
+    } catch (_) {
+      // Keep the current form values if loading fails.
+    }
+  }
 
   Future<void> pickImage() async {
     final picker = ImagePicker();

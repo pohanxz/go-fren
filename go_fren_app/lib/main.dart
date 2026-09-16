@@ -2478,7 +2478,7 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.lock_outline),
             title: const Text('Privacy'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {},
+            onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySettingsScreen())); },
           ),
           ListTile(
             leading: const Icon(Icons.block),
@@ -2490,7 +2490,7 @@ class SettingsScreen extends StatelessWidget {
                   builder: (_) => const BlockedUsersScreen(),
                 ),
               );
-            },
+          },
           ),
           ListTile(
             leading: const Icon(Icons.flag_outlined),
@@ -2526,6 +2526,203 @@ class SettingsScreen extends StatelessWidget {
 
 // EDIT PROFILE
 // ============================================================
+
+
+class PrivacySettingsScreen extends StatefulWidget {
+  const PrivacySettingsScreen({super.key});
+
+  @override
+  State<PrivacySettingsScreen> createState() =>
+      PrivacySettingsScreenState();
+}
+
+class PrivacySettingsScreenState
+    extends State<PrivacySettingsScreen> {
+  bool showProfile = true;
+  bool showCity = true;
+  bool allowNewMatches = true;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadSettings();
+  }
+
+  Future<void> loadSettings() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('privacy_settings')
+          .select(
+            'show_profile, show_city, allow_new_matches',
+          )
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (response != null) {
+        setState(() {
+          showProfile = response['show_profile'] as bool? ?? true;
+          showCity = response['show_city'] as bool? ?? true;
+          allowNewMatches =
+              response['allow_new_matches'] as bool? ?? true;
+        });
+      } else {
+        await Supabase.instance.client
+            .from('privacy_settings')
+            .insert({
+          'user_id': user.id,
+        });
+      }
+
+      setState(() {
+        isLoading = false;
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load privacy settings.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> updateSetting({
+    required String column,
+    required bool value,
+  }) async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('privacy_settings')
+          .upsert({
+        'user_id': user.id,
+        column: value,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      if (!mounted) return;
+
+      setState(() {
+        if (column == 'show_profile') {
+          showProfile = value;
+        } else if (column == 'show_city') {
+          showCity = value;
+        } else if (column == 'allow_new_matches') {
+          allowNewMatches = value;
+        }
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to update privacy setting.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'Privacy',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : ListView(
+              children: [
+                SwitchListTile(
+                  title: const Text(
+                    'Show my profile',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Allow your profile to appear in Discovery.',
+                  ),
+                  value: showProfile,
+                  onChanged: (value) {
+                    updateSetting(
+                      column: 'show_profile',
+                      value: value,
+                    );
+                  },
+                ),
+                const Divider(),
+                SwitchListTile(
+                  title: const Text(
+                    'Show my city',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Show your city on your profile.',
+                  ),
+                  value: showCity,
+                  onChanged: (value) {
+                    updateSetting(
+                      column: 'show_city',
+                      value: value,
+                    );
+                  },
+                ),
+                const Divider(),
+                SwitchListTile(
+                  title: const Text(
+                    'Allow new matches',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text(
+                    'Allow other users to match with you.',
+                  ),
+                  value: allowNewMatches,
+                  onChanged: (value) {
+                    updateSetting(
+                      column: 'allow_new_matches',
+                      value: value,
+                    );
+                  },
+                ),
+              ],
+            ),
+    );
+  }
+}
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});

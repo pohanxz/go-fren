@@ -2883,20 +2883,30 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 CircleAvatar(
                   radius: 60,
                   backgroundColor: const Color(0xFFE8E5FF),
-                  child: selectedImage == null
-                      ? const Icon(
-                          Icons.person,
-                          size: 65,
-                          color: Color(0xFF6C5CE7),
-                        )
-                      : ClipOval(
+                  child: selectedImage != null
+                      ? ClipOval(
                           child: Image.file(
                             File(selectedImage!.path),
                             width: 120,
                             height: 120,
                             fit: BoxFit.cover,
                           ),
-                        ),
+                        )
+                      : existingAvatarUrl != null &&
+                              existingAvatarUrl!.isNotEmpty
+                          ? ClipOval(
+                              child: Image.network(
+                                existingAvatarUrl!,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.person,
+                              size: 65,
+                              color: Color(0xFF6C5CE7),
+                            ),
                 ),
                 Positioned(
                   right: 0,

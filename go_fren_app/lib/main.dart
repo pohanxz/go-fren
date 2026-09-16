@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
 
@@ -2732,98 +2735,35 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final nameController = TextEditingController();
-  final cityController = TextEditingController();
-  final bioController = TextEditingController();
+  final nameController = TextEditingController(text: 'Ivan');
+  final cityController = TextEditingController(text: 'Jakarta');
+  final bioController = TextEditingController(
+    text: 'Love meeting new people and having good conversations.',
+  );
 
-  @override
-  void initState() {
-    super.initState();
-    loadProfile();
-  }
+  XFile? selectedImage;
 
-  Future<void> loadProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
+  Future<void> pickImage() async {
+    final picker = ImagePicker();
 
-    if (user == null) return;
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
 
-    try {
-      final response = await Supabase.instance.client
-          .from("profiles")
-          .select("name, city, bio")
-          .eq("id", user.id)
-          .maybeSingle();
+    if (image == null || !mounted) return;
 
-      if (response == null || !mounted) return;
-
-      setState(() {
-        nameController.text = response["name"] as String? ?? "";
-        cityController.text = response["city"] as String? ?? "";
-        bioController.text = response["bio"] as String? ?? "";
-      });
-    } on PostgrestException catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Failed to load profile."),
-        ),
-      );
-    }
+    setState(() {
+      selectedImage = image;
+    });
   }
 
   Future<void> saveProfile() async {
-    final user = Supabase.instance.client.auth.currentUser;
-
-    if (user == null) return;
-
-    final name = nameController.text.trim();
-    final city = cityController.text.trim();
-    final bio = bioController.text.trim();
-
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Name cannot be empty.")),
-      );
-      return;
-    }
-
-    try {
-      await Supabase.instance.client.from("profiles").update({
-        "name": name,
-        "city": city,
-        "bio": bio,
-        "updated_at": DateTime.now().toIso8601String(),
-      }).eq("id", user.id);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile updated.")),
-      );
-
-      Navigator.pop(context);
-    } on PostgrestException catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    } catch (_) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Failed to update profile."),
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Profile saved.'),
+      ),
+    );
   }
 
   @override
@@ -2838,42 +2778,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit Profile'),
-        actions: [
-          TextButton(
-          onPressed: saveProfile,
-            child: const Text('SAVE'),
-          ),
-        ],
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         children: [
           Center(
             child: Stack(
               children: [
-                const CircleAvatar(
+                CircleAvatar(
                   radius: 60,
-                  backgroundColor: Color(0xFFE8E5FF),
-                  child: Icon(
-                    Icons.person,
-                    size: 65,
-                    color: Color(0xFF6C5CE7),
-                  ),
+                  backgroundColor: const Color(0xFFE8E5FF),
+                  child: selectedImage == null
+                      ? const Icon(
+                          Icons.person,
+                          size: 65,
+                          color: Color(0xFF6C5CE7),
+                        )
+                      : ClipOval(
+                          child: Image.file(
+                            File(selectedImage!.path),
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                 ),
                 Positioned(
                   right: 0,
                   bottom: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF6C5CE7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      color: Colors.white,
-                      size: 20,
+                  child: GestureDetector(
+                    onTap: pickImage,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF6C5CE7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -2904,6 +2853,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             decoration: const InputDecoration(
               labelText: 'Bio',
               alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton(
+              onPressed: saveProfile,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C5CE7),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+              child: const Text(
+                'SAVE PROFILE',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],

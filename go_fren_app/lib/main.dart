@@ -2759,11 +2759,70 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> saveProfile() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Profile saved.'),
-      ),
-    );
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in first.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      String? avatarUrl;
+
+      if (selectedImage != null) {
+        final filePath = '${user.id}/profile.jpg';
+
+        await Supabase.instance.client.storage
+            .from('avatars')
+            .upload(
+              filePath,
+              File(selectedImage!.path),
+              fileOptions: const FileOptions(
+                upsert: true,
+                contentType: 'image/jpeg',
+              ),
+            );
+
+        avatarUrl = Supabase.instance.client.storage
+            .from('avatars')
+            .getPublicUrl(filePath);
+      }
+
+      final data = {
+        'name': nameController.text.trim(),
+        'city': cityController.text.trim(),
+        'bio': bioController.text.trim(),
+      };
+
+      if (avatarUrl != null) {
+        data['avatar_url'] = avatarUrl;
+      }
+
+      await Supabase.instance.client
+          .from('profiles')
+          .update(data)
+          .eq('id', user.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile saved successfully.'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save profile: $e'),
+        ),
+      );
+    }
   }
 
   @override

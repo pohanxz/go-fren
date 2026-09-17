@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -2576,6 +2577,43 @@ class _ChatScreenState extends State<ChatScreen> {
   String? matchId;
   RealtimeChannel? messagesChannel;
   bool isLoading = true;
+  bool isSendingImage = false;
+  bool showEmojiPicker = false;
+
+  final emojis = const [
+    '😀',
+    '😃',
+    '😄',
+    '😁',
+    '😆',
+    '😅',
+    '😂',
+    '🤣',
+    '😊',
+    '😇',
+    '🙂',
+    '🙃',
+    '😉',
+    '😌',
+    '😍',
+    '🥰',
+    '😘',
+    '😎',
+    '🤩',
+    '🤔',
+    '😅',
+    '😢',
+    '😭',
+    '😡',
+    '😱',
+    '👍',
+    '👎',
+    '❤️',
+    '💕',
+    '🔥',
+    '🎉',
+    '🙏',
+  ];
 
   @override
   void initState() {
@@ -2632,10 +2670,17 @@ class _ChatScreenState extends State<ChatScreen> {
             callback: (payload) {
               if (!mounted) return;
 
+              final newMessage =
+                  Map<String, dynamic>.from(payload.newRecord);
+
+              final messageId = newMessage['id'];
+
+              if (messages.any((item) => item['id'] == messageId)) {
+                return;
+              }
+
               setState(() {
-                messages.add(
-                  Map<String, dynamic>.from(payload.newRecord),
-                );
+                messages.add(newMessage);
               });
             },
           )
@@ -2702,6 +2747,290 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> sendImage() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null || matchId == null || isSendingImage) return;
+
+    try {
+      setState(() {
+        isSendingImage = true;
+        showEmojiPicker = false;
+      });
+
+      final picker = ImagePicker();
+
+      final image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+        maxWidth: 1600,
+      );
+
+      if (image == null) {
+        if (mounted) {
+          setState(() => isSendingImage = false);
+        }
+        return;
+      }
+
+      final bytes = await image.readAsBytes();
+      final extension =
+          image.name.contains('.') ? image.name.split('.').last : 'jpg';
+
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}.$extension';
+
+      final filePath = '${user.id}/$fileName';
+
+      await Supabase.instance.client.storage
+          .from('chat-images')
+          .uploadBinary(
+            filePath,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: _contentType(extension),
+              upsert: false,
+            ),
+          );
+
+      final imageUrl = Supabase.instance.client.storage
+          .from('chat-images')
+          .getPublicUrl(filePath);
+
+      await Supabase.instance.client.from('messages').insert({
+        'match_id': matchId,
+        'sender_id': user.id,
+        'message': 'image:$imageUrl',
+      });
+    } on StorageException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send image.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isSendingImage = false);
+      }
+    }
+  }
+
+  String _contentType(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+  void addEmoji(String emoji) {
+    final text = messageController.text;
+    final selection = messageController.selection;
+
+    if (!selection.isValid) {
+      messageController.text = '$text$emoji';
+      messageController.selection = TextSelection.collapsed(
+        offset: messageController.text.length,
+      );
+      return;
+    }
+
+    final start = selection.start;
+    final end = selection.end;
+
+    final newText = text.replaceRange(
+      start,
+      end,
+      emoji,
+    );
+
+    messageController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset: start + emoji.length,
+      ),
+    );
+  }
+
+  bool isImageMessage(String text) {
+    return text.startsWith('image:');
+  }
+
+  String imageUrlFromMessage(String text) {
+    return text.substring(6);
+  }
+
+  String formatTime(dynamic value) {
+    if (value == null) return '';
+
+    final date = DateTime.tryParse(value.toString());
+
+    if (date == null) return '';
+
+    final local = date.toLocal();
+
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+
+    return '$hour:$minute';
+  }
+
+  Widget buildMessageBubble(
+    Map<String, dynamic> item,
+    String? currentUserId,
+  ) {
+    final senderId = item['sender_id']?.toString();
+    final isMe = senderId != null && senderId == currentUserId;
+    final text = item['message'] as String? ?? '';
+    final isImage = isImageMessage(text);
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        margin: EdgeInsets.only(
+          left: isMe ? 60 : 8,
+          right: isMe ? 8 : 60,
+          bottom: 8,
+        ),
+        padding: isImage
+            ? const EdgeInsets.all(4)
+            : const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 9,
+              ),
+        decoration: BoxDecoration(
+          color: isMe
+              ? const Color(0xFF6C5CE7)
+              : Colors.grey.shade200,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMe ? 18 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 18),
+          ),
+        ),
+        child: isImage
+            ? ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.network(
+                  imageUrlFromMessage(text),
+                  width: 230,
+                  height: 230,
+                  fit: BoxFit.cover,
+                  loadingBuilder:
+                      (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+
+                    return const SizedBox(
+                      width: 230,
+                      height: 230,
+                      child: Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) {
+                    return const SizedBox(
+                      width: 230,
+                      height: 230,
+                      child: Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          size: 40,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              )
+            : Column(
+                crossAxisAlignment:
+                    isMe
+                        ? CrossAxisAlignment.end
+                        : CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    text,
+                    style: TextStyle(
+                      color: isMe
+                          ? Colors.white
+                          : Colors.black87,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    formatTime(item['created_at']),
+                    style: TextStyle(
+                      color: isMe
+                          ? Colors.white70
+                          : Colors.black45,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget buildEmojiPicker() {
+    return Container(
+      height: 230,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: Colors.grey.shade300,
+          ),
+        ),
+      ),
+      child: GridView.builder(
+        padding: const EdgeInsets.all(10),
+        itemCount: emojis.length,
+        gridDelegate:
+            const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 8,
+          childAspectRatio: 1,
+        ),
+        itemBuilder: (context, index) {
+          return InkWell(
+            onTap: () => addEmoji(emojis[index]),
+            child: Center(
+              child: Text(
+                emojis[index],
+                style: const TextStyle(fontSize: 27),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserId =
@@ -2721,7 +3050,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   : null,
             ),
             const SizedBox(width: 10),
-            Text(widget.profile.name),
+            Expanded(
+              child: Text(
+                widget.profile.name,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
       ),
@@ -2734,74 +3068,124 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: messages.isEmpty
                       ? const Center(
-                          child: Text('No messages yet.'),
+                          child: Text(
+                            'No messages yet.\nSay hello 👋',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 16),
+                          ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          reverse: false,
+                          padding: const EdgeInsets.fromLTRB(
+                            12,
+                            16,
+                            12,
+                            12,
+                          ),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
-                            final item = messages[index];
-                            final isMe =
-                                item['sender_id'] == currentUserId;
-
-                            return Align(
-                              alignment: isMe
-                                  ? Alignment.centerRight
-                                  : Alignment.centerLeft,
-                              child: Container(
-                                margin:
-                                    const EdgeInsets.only(bottom: 10),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isMe
-                                      ? const Color(0xFF6C5CE7)
-                                      : Colors.grey.shade200,
-                                  borderRadius:
-                                      BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  item['message'] as String,
-                                  style: TextStyle(
-                                    color: isMe
-                                        ? Colors.white
-                                        : Colors.black87,
-                                  ),
-                                ),
-                              ),
+                            return buildMessageBubble(
+                              messages[index],
+                              currentUserId,
                             );
                           },
                         ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: messageController,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (_) => sendMessage(),
-                          decoration: InputDecoration(
-                            hintText: 'Type a message...',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 16,
+                if (isSendingImage)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Text('Sending image...'),
+                      ],
+                    ),
+                  ),
+                if (showEmojiPicker) buildEmojiPicker(),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      8,
+                      6,
+                      8,
+                      8,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          tooltip: 'Emoji',
+                          onPressed: () {
+                            setState(() {
+                              showEmojiPicker = !showEmojiPicker;
+                            });
+                          },
+                          icon: Icon(
+                            showEmojiPicker
+                                ? Icons.keyboard
+                                : Icons.emoji_emotions_outlined,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Send image',
+                          onPressed:
+                              isSendingImage ? null : sendImage,
+                          icon: const Icon(
+                            Icons.image_outlined,
+                          ),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: messageController,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.send,
+                            onTap: () {
+                              if (showEmojiPicker) {
+                                setState(() {
+                                  showEmojiPicker = false;
+                                });
+                              }
+                            },
+                            onSubmitted: (_) => sendMessage(),
+                            decoration: InputDecoration(
+                              hintText: 'Type a message...',
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius:
+                                    BorderRadius.circular(24),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 11,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: sendMessage,
-                        icon: const Icon(Icons.send),
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        CircleAvatar(
+                          backgroundColor:
+                              const Color(0xFF6C5CE7),
+                          child: IconButton(
+                            onPressed: sendMessage,
+                            color: Colors.white,
+                            icon: const Icon(Icons.send),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -2809,7 +3193,6 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-
 
 class BlockedUsersScreen extends StatefulWidget {
   const BlockedUsersScreen({super.key});

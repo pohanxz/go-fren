@@ -249,6 +249,47 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> resetPassword() async {
+    final email = emailController.text.trim();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email first.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset email sent. Check your inbox.'),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send password reset email.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -302,7 +343,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {},
+                  onPressed: resetPassword,
                   child: const Text('Forgot password?'),
                 ),
               ),

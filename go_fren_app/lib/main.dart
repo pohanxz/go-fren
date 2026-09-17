@@ -419,22 +419,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    if (birthDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your date of birth.'),
+        ),
+      );
+      return;
+    }
+
+    final today = DateTime.now();
+    var age = today.year - birthDate!.year;
+
+    if (today.month < birthDate!.month ||
+        (today.month == birthDate!.month &&
+            today.day < birthDate!.day)) {
+      age--;
+    }
+
+    if (age < 18) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must be 18 years old or older.'),
+        ),
+      );
+      return;
+    }
+
     try {
       final response = await Supabase.instance.client.auth.signUp(
         email: emailController.text.trim(),
         password: passwordController.text,
       );
 
-      if (response.user == null) {
+      final user = response.user;
+
+      if (user == null) {
         throw const AuthException('Registration failed.');
       }
+
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user.id,
+        'name': nameController.text.trim(),
+        'bio': '',
+        'gender': gender,
+        'birth_date': birthDate!.toIso8601String().split('T').first,
+        'city': cityController.text.trim(),
+      });
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileSetupScreen(
+            name: nameController.text,
+            city: cityController.text,
+            birthDate: birthDate!,
+            gender: gender,
+          ),
+        ),
+      );
     } on AuthException catch (e) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
-      return;
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save profile: ${e.message}')),
+      );
     } catch (_) {
       if (!mounted) return;
 
@@ -443,22 +500,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           content: Text('Registration failed. Please try again.'),
         ),
       );
-      return;
     }
-
-    if (!mounted) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProfileSetupScreen(
-          name: nameController.text,
-          city: cityController.text,
-        birthDate: birthDate!,
-        gender: gender,
-        ),
-      ),
-    );
   }
 
   @override

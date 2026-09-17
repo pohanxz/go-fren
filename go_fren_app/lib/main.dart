@@ -2378,11 +2378,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
       final messageResponse = await Supabase.instance.client
           .from('messages')
-          .select('match_id, message, created_at')
+          .select('match_id, sender_id, message, created_at, read_at')
           .inFilter('match_id', matchIds)
           .order('created_at', ascending: false);
 
       final lastMessageMap = <String, Map<String, dynamic>>{};
+      final unreadCountMap = <String, int>{};
 
       for (final item in messageResponse as List) {
         final message = Map<String, dynamic>.from(item);
@@ -2390,6 +2391,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
         if (!lastMessageMap.containsKey(id)) {
           lastMessageMap[id] = message;
+        }
+
+        final senderId = message['sender_id']?.toString();
+        final readAt = message['read_at'];
+
+        if (senderId != user.id && readAt == null) {
+          unreadCountMap[id] = (unreadCountMap[id] ?? 0) + 1;
         }
       }
 
@@ -2412,6 +2420,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           'last_message': lastMessageMap[matchId]?['message'] as String?,
           'last_message_at':
               lastMessageMap[matchId]?['created_at'] as String?,
+          'unread_count': unreadCountMap[matchId] ?? 0,
         });
       }
 
@@ -2432,6 +2441,38 @@ class _ChatsScreenState extends State<ChatsScreen> {
         ),
       );
     }
+  }
+
+  String formatChatTime(String value) {
+    final date = DateTime.tryParse(value)?.toLocal();
+
+    if (date == null) return '';
+
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
+      final hour = date.hour.toString().padLeft(2, '0');
+      final minute = date.minute.toString().padLeft(2, '0');
+      return '$hour:$minute';
+    }
+
+    if (difference.inDays < 7) {
+      const days = [
+        'Mon',
+        'Tue',
+        'Wed',
+        'Thu',
+        'Fri',
+        'Sat',
+        'Sun',
+      ];
+      return days[date.weekday - 1];
+    }
+
+    return '${date.day}/${date.month}';
   }
 
   Profile profileFromMap(Map<String, dynamic> item) {
@@ -2508,6 +2549,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
             );
 
             final lastMessage = item['last_message'] as String?;
+            final unreadCount = item['unread_count'] as int? ?? 0;
+            final lastMessageAt = item['last_message_at'] as String?;
 
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(
@@ -2523,18 +2566,75 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     ? const Icon(Icons.person)
                     : null,
               ),
-              title: Text(
-                profile.name,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${profile.name}${profile.age > 0 ? ', ${profile.age}' : ''}',
+                      style: TextStyle(
+                        fontWeight:
+                            unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (lastMessageAt != null)
+                    Text(
+                      formatChatTime(lastMessageAt),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: unreadCount > 0
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.grey.shade600,
+                        fontWeight:
+                            unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                ],
               ),
-              subtitle: Text(
-                lastMessage?.isNotEmpty == true
-                    ? lastMessage!
-                    : 'No messages yet.',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              subtitle: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      lastMessage?.startsWith('image:')
+                          ? '📷 Photo'
+                          : lastMessage?.isNotEmpty == true
+                              ? lastMessage!
+                              : 'No messages yet.',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                  if (unreadCount > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 22,
+                        minHeight: 22,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        unreadCount > 99 ? '99+' : '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               onTap: () {
                 Navigator.push(

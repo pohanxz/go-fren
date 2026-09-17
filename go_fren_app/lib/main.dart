@@ -834,6 +834,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
   }
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -3293,7 +3294,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             width: double.infinity,
             height: 55,
             child: ElevatedButton(
-              onPressed: isSaving ? null : saveProfile,
+              onPressed: saveProfile,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6C5CE7),
                 foregroundColor: Colors.white,
@@ -3302,7 +3303,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
               child: Text(
-                isSaving ? 'SAVING...' : 'SAVE PROFILE',
+                'SAVE PROFILE',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),

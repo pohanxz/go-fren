@@ -2917,6 +2917,165 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> blockUser() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final blockedUserId = widget.profile.id;
+
+    if (user == null || blockedUserId == null) return;
+
+    try {
+      await Supabase.instance.client.from('blocks').upsert({
+        'blocker_id': user.id,
+        'blocked_id': blockedUserId,
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('User blocked.'),
+        ),
+      );
+
+      Navigator.pop(context);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to block user. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> reportUser() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final reportedUserId = widget.profile.id;
+
+    if (user == null || reportedUserId == null) return;
+
+    String selectedReason = 'Spam or scam';
+    final detailsController = TextEditingController();
+
+    final shouldReport = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Report user'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      decoration: const InputDecoration(
+                        labelText: 'Reason',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Spam or scam',
+                          child: Text('Spam or scam'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Harassment',
+                          child: Text('Harassment'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Inappropriate behavior',
+                          child: Text('Inappropriate behavior'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Fake profile',
+                          child: Text('Fake profile'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Other',
+                          child: Text('Other'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedReason = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: detailsController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Details (optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('CANCEL'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('REPORT'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final details = detailsController.text.trim();
+    detailsController.dispose();
+
+    if (shouldReport != true) return;
+
+    try {
+      await Supabase.instance.client.from('reports').insert({
+        'reporter_id': user.id,
+        'reported_user_id': reportedUserId,
+        'reason': selectedReason,
+        'details': details,
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Report submitted.'),
+        ),
+      );
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to submit report. Please try again.'),
+        ),
+      );
+    }
+  }
+
   Future<void> sendMessage() async {
     final text = messageController.text.trim();
     final user = Supabase.instance.client.auth.currentUser;
@@ -3259,6 +3418,63 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'report') {
+                await reportUser();
+              } else if (value == 'block') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text('Block user?'),
+                      content: Text(
+                        'You will no longer see ${widget.profile.name} in Discover, Matches, or Chats.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Block'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (confirmed == true) {
+                  await blockUser();
+                }
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(Icons.block),
+                    SizedBox(width: 10),
+                    Text('Block user'),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined),
+                    SizedBox(width: 10),
+                    Text('Report user'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(

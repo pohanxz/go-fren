@@ -2291,11 +2291,204 @@ class _MatchesScreenState extends State<MatchesScreen> {
   }
 }
 
-class ChatsScreen extends StatelessWidget {
+class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
 
   @override
+  State<ChatsScreen> createState() => _ChatsScreenState();
+}
+
+class _ChatsScreenState extends State<ChatsScreen> {
+  List<Map<String, dynamic>> chats = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadChats();
+  }
+
+  Future<void> loadChats() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      return;
+    }
+
+    try {
+      final blockedResponse = await Supabase.instance.client
+          .from('blocks')
+          .select('blocked_id')
+          .eq('blocker_id', user.id);
+
+      final blockedIds = (blockedResponse as List)
+          .map((item) => item['blocked_id'] as String)
+          .toSet();
+
+      final matchResponse = await Supabase.instance.client
+          .from('matches')
+          .select('id, user_id, matched_user_id, created_at')
+          .or(
+            'user_id.eq.${user.id},matched_user_id.eq.${user.id}',
+          )
+          .order('created_at', ascending: false);
+
+      final matchIds = <String>[];
+      final otherUserIds = <String>[];
+      final matchRows = <Map<String, dynamic>>[];
+
+      for (final item in matchResponse as List) {
+        final row = Map<String, dynamic>.from(item);
+
+        final otherUserId = row['user_id'] == user.id
+            ? row['matched_user_id'] as String
+            : row['user_id'] as String;
+
+        if (blockedIds.contains(otherUserId)) continue;
+
+        matchIds.add(row['id'] as String);
+        otherUserIds.add(otherUserId);
+        matchRows.add(row);
+      }
+
+      if (matchRows.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          chats = [];
+          isLoading = false;
+        });
+        return;
+      }
+
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('id, name, bio, birth_date, city, avatar_url')
+          .inFilter('id', otherUserIds);
+
+      final profileMap = <String, Map<String, dynamic>>{};
+
+      for (final item in profileResponse as List) {
+        final profile = Map<String, dynamic>.from(item);
+        profileMap[profile['id'] as String] = profile;
+      }
+
+      final messageResponse = await Supabase.instance.client
+          .from('messages')
+          .select('match_id, message, created_at')
+          .inFilter('match_id', matchIds)
+          .order('created_at', ascending: false);
+
+      final lastMessageMap = <String, Map<String, dynamic>>{};
+
+      for (final item in messageResponse as List) {
+        final message = Map<String, dynamic>.from(item);
+        final id = message['match_id'] as String;
+
+        if (!lastMessageMap.containsKey(id)) {
+          lastMessageMap[id] = message;
+        }
+      }
+
+      final loadedChats = <Map<String, dynamic>>[];
+
+      for (final match in matchRows) {
+        final matchId = match['id'] as String;
+
+        final otherUserId = match['user_id'] == user.id
+            ? match['matched_user_id'] as String
+            : match['user_id'] as String;
+
+        final profile = profileMap[otherUserId];
+
+        if (profile == null) continue;
+
+        loadedChats.add({
+          'match_id': matchId,
+          'profile': profile,
+          'last_message': lastMessageMap[matchId]?['message'] as String?,
+          'last_message_at':
+              lastMessageMap[matchId]?['created_at'] as String?,
+        });
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        chats = loadedChats;
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load chats.'),
+        ),
+      );
+    }
+  }
+
+  Profile profileFromMap(Map<String, dynamic> item) {
+    final birthDateText = item['birth_date'] as String?;
+    final birthDate = birthDateText != null
+        ? DateTime.tryParse(birthDateText)
+        : null;
+
+    var age = 0;
+
+    if (birthDate != null) {
+      final now = DateTime.now();
+      age = now.year - birthDate.year;
+
+      if (now.month < birthDate.month ||
+          (now.month == birthDate.month && now.day < birthDate.day)) {
+        age--;
+      }
+    }
+
+    return Profile(
+      id: item['id'] as String,
+      name: item['name'] as String? ?? 'Unknown',
+      age: age,
+      city: item['city'] as String? ?? '',
+      bio: item['bio'] as String? ?? '',
+      imageUrl: item['avatar_url'] as String? ?? '',
+      interests: const [],
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (chats.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Chats',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        body: const Center(
+          child: Text(
+            'No chats yet.',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -2303,57 +2496,58 @@ class ChatsScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
-      body: ListView(
-        children: [
-          ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            leading: CircleAvatar(
-              radius: 28,
-              backgroundImage:
-                  NetworkImage(demoProfiles[0].imageUrl),
-            ),
-            title: const Text(
-              'Sarah',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: const Text('Nice to meet you!'),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChatScreen(
-                    profile: demoProfiles[0],
-                  ),
+      body: RefreshIndicator(
+        onRefresh: loadChats,
+        child: ListView.builder(
+          itemCount: chats.length,
+          itemBuilder: (context, index) {
+            final item = chats[index];
+            final profile = profileFromMap(
+              item['profile'] as Map<String, dynamic>,
+            );
+
+            final lastMessage = item['last_message'] as String?;
+
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 8,
+              ),
+              leading: CircleAvatar(
+                radius: 28,
+                backgroundImage: profile.imageUrl.isNotEmpty
+                    ? NetworkImage(profile.imageUrl)
+                    : null,
+                child: profile.imageUrl.isEmpty
+                    ? const Icon(Icons.person)
+                    : null,
+              ),
+              title: Text(
+                profile.name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
                 ),
-              );
-            },
-          ),
-          ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            leading: CircleAvatar(
-              radius: 28,
-              backgroundImage:
-                  NetworkImage(demoProfiles[1].imageUrl),
-            ),
-            title: const Text(
-              'Maya',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: const Text('Hey! How are you?'),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ChatScreen(
-                    profile: demoProfiles[1],
+              ),
+              subtitle: Text(
+                lastMessage?.isNotEmpty == true
+                    ? lastMessage!
+                    : 'No messages yet.',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      profile: profile,
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-        ],
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

@@ -3013,8 +3013,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       await Supabase.instance.client
           .from('profiles')
-          .update(data)
-          .eq('id', user.id);
+          .upsert({
+            'id': user.id,
+            ...data,
+          });
 
       if (!mounted) return;
 

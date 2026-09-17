@@ -2463,7 +2463,7 @@ class SettingsScreen extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const EditProfileScreen(),
+                  builder: (_) => const ProfileScreen(),
                 ),
               );
             },
@@ -2523,6 +2523,183 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+// MY PROFILE
+// ============================================================
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Map<String, dynamic>? profile;
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  Future<void> loadProfile() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('name, city, bio, avatar_url')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        profile = response;
+        loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to load profile.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarUrl = profile?['avatar_url']?.toString() ?? '';
+    final name = profile?['name']?.toString() ?? '';
+    final city = profile?['city']?.toString() ?? '';
+    final bio = profile?['bio']?.toString() ?? '';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          'My Profile',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : RefreshIndicator(
+              onRefresh: loadProfile,
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const SizedBox(height: 20),
+                  Center(
+                    child: CircleAvatar(
+                      radius: 65,
+                      backgroundColor: const Color(0xFFE8E5FF),
+                      backgroundImage: avatarUrl.isNotEmpty
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      child: avatarUrl.isEmpty
+                          ? const Icon(
+                              Icons.person,
+                              size: 65,
+                              color: Color(0xFF6C5CE7),
+                            )
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Text(
+                      name.isEmpty ? 'Your Name' : name,
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (city.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.location_on_outlined,
+                            size: 18,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            city,
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+                  const Text(
+                    'About me',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    bio.isEmpty ? 'No bio yet.' : bio,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EditProfileScreen(),
+                          ),
+                        );
+
+                        if (mounted) {
+                          loadProfile();
+                        }
+                      },
+                      icon: const Icon(Icons.edit),
+                      label: const Text('EDIT PROFILE'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

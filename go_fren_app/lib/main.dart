@@ -2818,7 +2818,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       String? avatarUrl;
 
       if (selectedImage != null) {
+        final sessionUserId = session.user.id;
         final filePath = '${user.id}/profile.jpg';
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'DEBUG ID: ${user.id} | SESSION: $sessionUserId | PATH: $filePath',
+            ),
+          ),
+        );
 
         await Supabase.instance.client.storage
             .from('avatars')

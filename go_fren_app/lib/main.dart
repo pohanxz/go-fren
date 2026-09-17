@@ -26,6 +26,7 @@ class GoFrenApp extends StatefulWidget {
 
 class _GoFrenAppState extends State<GoFrenApp> {
   StreamSubscription<AuthState>? authSubscription;
+  final navigatorKey = GlobalKey<NavigatorState>();
   bool isPasswordRecovery = false;
 
   @override
@@ -34,9 +35,16 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
     authSubscription =
         Supabase.instance.client.auth.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.passwordRecovery && mounted) {
-        setState(() {
-          isPasswordRecovery = true;
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        isPasswordRecovery = true;
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => const UpdatePasswordScreen(),
+            ),
+            (route) => false,
+          );
         });
       }
     });
@@ -51,6 +59,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'Go Fren',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

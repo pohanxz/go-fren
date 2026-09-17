@@ -673,6 +673,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   late final TextEditingController cityController;
   final bioController = TextEditingController();
 
+  XFile? selectedImage;
+  bool isSaving = false;
+
   final interests = [
     'Music',
     'Movies',
@@ -699,6 +702,52 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     super.dispose();
   }
 
+  Future<void> pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+
+    final image = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+    );
+
+    if (image == null || !mounted) return;
+
+    setState(() {
+      selectedImage = image;
+    });
+  }
+
+  Future<void> showImageSourcePicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Take a photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Choose from gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  pickImage(ImageSource.gallery);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> saveProfile() async {
     final user = Supabase.instance.client.auth.currentUser;
 
@@ -711,7 +760,38 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       return;
     }
 
+    if (selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please add a profile photo before continuing.'),
+        ),
+      );
+      return;
+    }
+
+    if (isSaving) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
     try {
+      final filePath = '${user.id}/profile.jpg';
+
+      await Supabase.instance.client.storage
+          .from('avatars')
+          .upload(
+            filePath,
+            File(selectedImage!.path),
+            fileOptions: const FileOptions(
+              upsert: true,
+              contentType: 'image/jpeg',
+            ),
+          );
+
+      final avatarUrl =
+          '${Supabase.instance.client.storage.from('avatars').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}';
+
       await Supabase.instance.client.from('profiles').upsert({
         'id': user.id,
         'name': widget.name.trim(),
@@ -719,6 +799,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         'gender': widget.gender,
         'birth_date': widget.birthDate.toIso8601String().split('T').first,
         'city': cityController.text.trim(),
+        'avatar_url': avatarUrl,
       });
 
       if (!mounted) return;
@@ -731,189 +812,27 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
+      setState(() {
+        isSaving = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message)),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
 
+      setState(() {
+        isSaving = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save profile. Please try again.'),
+        SnackBar(
+          content: Text('Failed to save profile: $e'),
         ),
       );
     }
   }
-
-@override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile Setup'),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Complete Your Profile',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tell people a little about yourself.',
-                style: TextStyle(color: Colors.grey.shade600),
-              ),
-              const SizedBox(height: 25),
-              Center(
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 60,
-                      backgroundColor: const Color(0xFFE8E5FF),
-                      child: const Icon(
-                        Icons.person,
-                        size: 65,
-                        color: Color(0xFF6C5CE7),
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF6C5CE7),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 25),
-              Text(
-                'Your name',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                widget.name.isEmpty ? 'Your Name' : widget.name,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: cityController,
-                decoration: const InputDecoration(
-                  labelText: 'City',
-                  prefixIcon: Icon(Icons.location_city),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: bioController,
-                maxLength: 160,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Bio',
-                  hintText: 'Tell people something about you...',
-                  alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Your interests',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: interests.map((interest) {
-                  final selected =
-                      selectedInterests.contains(interest);
-
-                  return FilterChip(
-                    label: Text(interest),
-                    selected: selected,
-                    onSelected: (value) {
-                      setState(() {
-                        if (value) {
-                          selectedInterests.add(interest);
-                        } else {
-                          selectedInterests.remove(interest);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton(
-                  onPressed: saveProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C5CE7),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                  ),
-                  child: const Text(
-                    'SAVE PROFILE',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// MAIN NAVIGATION
-// ============================================================
-
-class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
-
-  @override
-  State<MainNavigation> createState() => _MainNavigationState();
-}
-
-class _MainNavigationState extends State<MainNavigation> {
-  int currentIndex = 0;
-
-  final pages = const [
-    DiscoveryScreen(),
-    MatchesScreen(),
-    ChatsScreen(),
-    SettingsScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -3197,7 +3116,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             width: double.infinity,
             height: 55,
             child: ElevatedButton(
-              onPressed: saveProfile,
+              onPressed: isSaving ? null : saveProfile,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF6C5CE7),
                 foregroundColor: Colors.white,
@@ -3205,9 +3124,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   borderRadius: BorderRadius.circular(15),
                 ),
               ),
-              child: const Text(
-                'SAVE PROFILE',
-                style: TextStyle(
+              child: Text(
+                isSaving ? 'SAVING...' : 'SAVE PROFILE',
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                 ),
               ),

@@ -2996,9 +2996,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             );
 
-        avatarUrl = Supabase.instance.client.storage
-            .from('avatars')
-            .getPublicUrl(filePath);
+        avatarUrl = "${Supabase.instance.client.storage.from('avatars').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}";
       }
 
       final data = {

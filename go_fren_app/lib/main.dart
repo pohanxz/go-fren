@@ -264,6 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
+        redirectTo: 'gofren://reset-password',
       );
 
       if (!mounted) return;

@@ -2803,32 +2803,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     try {
-      final session = Supabase.instance.client.auth.currentSession;
-
-      if (session == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('DEBUG: Supabase session is null.'),
-          ),
-        );
-        return;
-      }
-
       String? avatarUrl;
 
       if (selectedImage != null) {
-        final sessionUserId = session.user.id;
         final filePath = '${user.id}/profile.jpg';
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'DEBUG ID: ${user.id} | SESSION: $sessionUserId | PATH: $filePath',
-            ),
-          ),
-        );
 
         await Supabase.instance.client.storage
             .from('avatars')
@@ -2871,14 +2849,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      final debugSession = Supabase.instance.client.auth.currentSession;
-      final debugUser = Supabase.instance.client.auth.currentUser;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'ERROR: $e | USER: ${debugUser?.id} | SESSION: ${debugSession?.user.id}',
-          ),
+          content: Text('Failed to save profile: $e'),
         ),
       );
     }

@@ -2446,12 +2446,29 @@ class SettingsScreen extends StatelessWidget {
         children: [
           const SizedBox(height: 10),
           ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: Color(0xFFE8E5FF),
-              child: Icon(
-                Icons.person,
-                color: Color(0xFF6C5CE7),
-              ),
+            leading: FutureBuilder(
+              future: Supabase.instance.client
+                  .from("profiles")
+                  .select("avatar_url")
+                  .eq("id", Supabase.instance.client.auth.currentUser!.id)
+                  .maybeSingle(),
+              builder: (context, snapshot) {
+                final avatarUrl = snapshot.data?["avatar_url"]?.toString() ?? "";
+
+                if (avatarUrl.isNotEmpty) {
+                  return CircleAvatar(
+                    backgroundImage: NetworkImage(avatarUrl),
+                  );
+                }
+
+                return const CircleAvatar(
+                  backgroundColor: Color(0xFFE8E5FF),
+                  child: Icon(
+                    Icons.person,
+                    color: Color(0xFF6C5CE7),
+                  ),
+                );
+              },
             ),
             title: const Text(
               'My Profile',

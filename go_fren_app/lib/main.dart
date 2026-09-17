@@ -2782,13 +2782,21 @@ class _ChatScreenState extends State<ChatScreen> {
               setState(() {
                 messages.add(newMessage);
               });
+
+              final currentUser =
+                  Supabase.instance.client.auth.currentUser;
+
+              if (currentUser != null &&
+                  newMessage['sender_id']?.toString() != currentUser.id) {
+                markMessagesAsRead();
+              }
             },
           )
           .subscribe();
 
       final messageResponse = await Supabase.instance.client
           .from('messages')
-          .select('id, sender_id, message, created_at')
+          .select('id, sender_id, message, created_at, read_at')
           .eq('match_id', matchId!)
           .order('created_at');
 
@@ -2803,6 +2811,8 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         isLoading = false;
       });
+
+      await markMessagesAsRead();
     } catch (_) {
       if (!mounted) return;
 
@@ -2813,6 +2823,23 @@ class _ChatScreenState extends State<ChatScreen> {
           content: Text('Failed to load chat.'),
         ),
       );
+    }
+  }
+
+  Future<void> markMessagesAsRead() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null || matchId == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('messages')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('match_id', matchId!)
+          .neq('sender_id', user.id)
+          .isFilter('read_at', null);
+    } catch (_) {
+      // Marking messages as read should not interrupt the chat.
     }
   }
 

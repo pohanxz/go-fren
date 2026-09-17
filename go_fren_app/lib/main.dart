@@ -2803,6 +2803,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
 
     try {
+      final session = Supabase.instance.client.auth.currentSession;
+
+      if (session == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('DEBUG: Supabase session is null.'),
+          ),
+        );
+        return;
+      }
+
       String? avatarUrl;
 
       if (selectedImage != null) {

@@ -2871,9 +2871,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } catch (e) {
       if (!mounted) return;
 
+      final debugSession = Supabase.instance.client.auth.currentSession;
+      final debugUser = Supabase.instance.client.auth.currentUser;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save profile: $e'),
+          content: Text(
+            'ERROR: $e | USER: ${debugUser?.id} | SESSION: ${debugSession?.user.id}',
+          ),
         ),
       );
     }

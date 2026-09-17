@@ -366,12 +366,29 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  StreamSubscription<AuthState>? authSubscription;
+  bool isPasswordRecovery = false;
+
   @override
   void initState() {
     super.initState();
 
+    authSubscription =
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.passwordRecovery && mounted) {
+        isPasswordRecovery = true;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const UpdatePasswordScreen(),
+          ),
+        );
+      }
+    });
+
     Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
+      if (!mounted || isPasswordRecovery) return;
 
       final session = Supabase.instance.client.auth.currentSession;
 
@@ -384,6 +401,12 @@ class _SplashScreenState extends State<SplashScreen> {
         ),
       );
     });
+  }
+
+  @override
+  void dispose() {
+    authSubscription?.cancel();
+    super.dispose();
   }
 
   @override

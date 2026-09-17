@@ -2676,9 +2676,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   String? matchId;
   RealtimeChannel? messagesChannel;
+  RealtimeChannel? typingChannel;
   bool isLoading = true;
   bool isSendingImage = false;
   bool showEmojiPicker = false;
+  bool isOtherUserTyping = false;
 
   final emojis = const [
     '😀',
@@ -2723,8 +2725,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    typingTimer?.cancel();
+    _setTyping(false);
     messageController.dispose();
     messagesChannel?.unsubscribe();
+    typingChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -2755,6 +2760,43 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       matchId = response['id'] as String;
+
+      typingChannel = Supabase.instance.client
+          .channel('typing-$matchId')
+          .onPresenceSync((payload) {
+            if (!mounted) return;
+
+            final currentUserId =
+                Supabase.instance.client.auth.currentUser?.id;
+
+            if (currentUserId == null) return;
+
+            final presenceState = typingChannel!.presenceState();
+
+            var otherUserTyping = false;
+
+            for (final state in presenceState) {
+              for (final presence in state.presences) {
+                final data = presence.payload;
+
+                if (data['user_id']?.toString() != currentUserId &&
+                    data['typing'] == true) {
+                  otherUserTyping = true;
+                }
+              }
+            }
+
+            if (isOtherUserTyping != otherUserTyping) {
+              setState(() {
+                isOtherUserTyping = otherUserTyping;
+              });
+            }
+          })
+          .subscribe((status, error) async {
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              await _setTyping(false);
+            }
+          });
 
       messagesChannel = Supabase.instance.client
           .channel('messages-$matchId')
@@ -2840,6 +2882,38 @@ class _ChatScreenState extends State<ChatScreen> {
           .isFilter('read_at', null);
     } catch (_) {
       // Marking messages as read should not interrupt the chat.
+    }
+  }
+
+  Timer? typingTimer;
+
+  void _handleTypingChanged(String value) {
+    typingTimer?.cancel();
+
+    if (value.trim().isEmpty) {
+      _setTyping(false);
+      return;
+    }
+
+    _setTyping(true);
+
+    typingTimer = Timer(const Duration(seconds: 2), () {
+      _setTyping(false);
+    });
+  }
+
+  Future<void> _setTyping(bool typing) async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null || typingChannel == null) return;
+
+    try {
+      await typingChannel!.track({
+        'user_id': user.id,
+        'typing': typing,
+      });
+    } catch (_) {
+      // Typing status is optional and should not interrupt the chat.
     }
   }
 
@@ -3218,6 +3292,25 @@ class _ChatScreenState extends State<ChatScreen> {
                           },
                         ),
                 ),
+                if (isOtherUserTyping)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      bottom: 4,
+                    ),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${widget.profile.name} is typing...',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (isSendingImage)
                   const Padding(
                     padding: EdgeInsets.only(bottom: 6),
@@ -3273,6 +3366,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         Expanded(
                           child: TextField(
                             controller: messageController,
+                            onChanged: _handleTypingChanged,
                             minLines: 1,
                             maxLines: 4,
                             textInputAction: TextInputAction.send,

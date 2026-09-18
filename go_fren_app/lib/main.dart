@@ -2599,8 +2599,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     child: Text(
                       lastMessage?.startsWith('image:')
                           ? '📷 Photo'
-                          : lastMessage?.isNotEmpty == true
-                              ? lastMessage!
+                          : lastMessage != null && lastMessage.isNotEmpty
+                              ? lastMessage
                               : 'No messages yet.',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2976,7 +2976,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<String>(
-                      value: selectedReason,
+                      initialValue: selectedReason,
                       decoration: const InputDecoration(
                         labelText: 'Reason',
                         border: OutlineInputBorder(),
@@ -3311,7 +3311,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     );
                   },
-                  errorBuilder: (_, __, ___) {
+                  errorBuilder: (context, error, stackTrace) {
                     return const SizedBox(
                       width: 230,
                       height: 230,
@@ -3492,7 +3492,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         )
                       : ListView.builder(
-                          reverse: false,
+                          reverse: true,
                           padding: const EdgeInsets.fromLTRB(
                             12,
                             16,
@@ -3501,8 +3501,11 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
+                            final message =
+                                messages[messages.length - 1 - index];
+
                             return buildMessageBubble(
-                              messages[index],
+                              message,
                               currentUserId,
                             );
                           },

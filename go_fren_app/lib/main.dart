@@ -295,6 +295,8 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   ),
                 ),
               ),
+              ),
+            ),
               const SizedBox(height: 16),
               TextField(
                 controller: confirmPasswordController,
@@ -1901,12 +1903,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOut,
-                  transform: Matrix4.translationValues(
-                    swipeOffset,
-                    0,
-                    0,
-                  )..rotateZ(swipeRotation),
-                  child: Card(
+                  child: Transform.translate(
+                    offset: Offset(swipeOffset, 0),
+                    child: Transform.rotate(
+                      angle: swipeRotation,
+                      child: Card(
                     clipBehavior: Clip.antiAlias,
                     elevation: 5,
                     shape: RoundedRectangleBorder(

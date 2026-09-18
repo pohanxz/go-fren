@@ -2955,6 +2955,7 @@ class _ChatScreenState extends State<ChatScreen> {
             filter: PostgresChangeFilter(
               type: PostgresChangeFilterType.eq,
               column: 'match_id',
+              value: matchId!,
             ),
             callback: (payload) {
 

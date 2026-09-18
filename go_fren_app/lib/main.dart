@@ -1911,6 +1911,72 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
+                          if (swipeOffset > 20)
+                            Positioned(
+                              top: 35,
+                              left: 25,
+                              child: Opacity(
+                                opacity: (swipeOffset / 180).clamp(0.0, 1.0),
+                                child: Transform.rotate(
+                                  angle: -0.12,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.greenAccent,
+                                        width: 3,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.black45,
+                                    ),
+                                    child: const Text(
+                                      'LIKE ❤️',
+                                      style: TextStyle(
+                                        color: Colors.greenAccent,
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (swipeOffset < -20)
+                            Positioned(
+                              top: 35,
+                              right: 25,
+                              child: Opacity(
+                                opacity: (-swipeOffset / 180).clamp(0.0, 1.0),
+                                child: Transform.rotate(
+                                  angle: 0.12,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: Colors.redAccent,
+                                        width: 3,
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.black45,
+                                    ),
+                                    child: const Text(
+                                      'SKIP ✕',
+                                      style: TextStyle(
+                                        color: Colors.redAccent,
+                                        fontSize: 26,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           Image.network(
                             profile.imageUrl,
                             fit: BoxFit.cover,

@@ -2671,6 +2671,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final messageController = TextEditingController();
+  final scrollController = ScrollController();
   final messages = <Map<String, dynamic>>[];
 
   String? matchId;
@@ -2727,9 +2728,28 @@ class _ChatScreenState extends State<ChatScreen> {
     typingTimer?.cancel();
     _setTyping(false);
     messageController.dispose();
+    scrollController.dispose();
     messagesChannel?.unsubscribe();
     typingChannel?.unsubscribe();
     super.dispose();
+  }
+
+  void scrollToLatest({bool animated = true}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) return;
+
+      final target = scrollController.position.maxScrollExtent;
+
+      if (animated) {
+        scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      } else {
+        scrollController.jumpTo(target);
+      }
+    });
   }
 
   Future<void> loadChat() async {
@@ -2824,6 +2844,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 messages.add(newMessage);
               });
 
+              scrollToLatest();
+
               final currentUser =
                   Supabase.instance.client.auth.currentUser;
 
@@ -2839,7 +2861,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .from('messages')
           .select('id, sender_id, message, created_at, read_at')
           .eq('match_id', matchId!)
-          .order('created_at');
+          .order('created_at', ascending: true);
 
       if (!mounted) return;
 
@@ -2852,6 +2874,8 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         isLoading = false;
       });
+
+      scrollToLatest(animated: false);
 
       await markMessagesAsRead();
     } catch (_) {
@@ -3491,7 +3515,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                         )
                       : ListView.builder(
-                          reverse: true,
+                          controller: scrollController,
+                          reverse: false,
                           padding: const EdgeInsets.fromLTRB(
                             12,
                             16,
@@ -3500,8 +3525,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
-                            final message =
-                                messages[messages.length - 1 - index];
+                            final message = messages[index];
 
                             return buildMessageBubble(
                               message,

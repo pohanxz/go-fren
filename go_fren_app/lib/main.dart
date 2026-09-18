@@ -1901,9 +1901,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOut,
-                  transform: Matrix4.identity()
-                    ..translateByDouble(swipeOffset, 0, 0, 1)
-                    ..rotateZ(swipeRotation),
+                  transform: Matrix4.translationValues(
+                    swipeOffset,
+                    0,
+                    0,
+                  )..rotateZ(swipeRotation),
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     elevation: 5,

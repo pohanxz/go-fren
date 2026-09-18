@@ -2028,7 +2028,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         ),
                       ),
                     ],
-                    ],
+                      ),
                   ),
                 ),
               ),

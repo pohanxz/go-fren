@@ -1603,6 +1603,31 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
   }
 
+  Future<void> refreshDiscovery() async {
+    if (isLoading) return;
+
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      await updateCurrentUserLocation();
+      await loadProfiles();
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to refresh discovery.'),
+        ),
+      );
+    }
+  }
+
   Future<void> showDiscoveryFilters() async {
     var selectedShowMe = showMe;
     var selectedMinAge = minAge;
@@ -1851,6 +1876,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   ),
                 ),
                 const Spacer(),
+                IconButton(
+                  onPressed: refreshDiscovery,
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh discovery',
+                ),
                 IconButton(
                   onPressed: showDiscoveryFilters,
                   icon: const Icon(Icons.tune),

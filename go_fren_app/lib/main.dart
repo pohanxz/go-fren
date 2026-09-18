@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -2597,11 +2596,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      lastMessage?.startsWith('image:')
-                          ? '📷 Photo'
-                          : lastMessage != null && lastMessage.isNotEmpty
-                              ? lastMessage
-                              : 'No messages yet.',
+                      lastMessage == null || lastMessage.isEmpty
+                          ? 'No messages yet.'
+                          : lastMessage.startsWith('image:')
+                              ? '📷 Photo'
+                              : lastMessage,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

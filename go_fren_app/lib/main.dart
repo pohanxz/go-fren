@@ -3375,37 +3375,63 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         child: isImage
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.network(
-                  imageUrlFromMessage(text),
-                  width: 230,
-                  height: 230,
-                  fit: BoxFit.cover,
-                  loadingBuilder:
-                      (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
+            ? GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                        backgroundColor: Colors.black,
+                        appBar: AppBar(
+                          backgroundColor: Colors.black,
+                          foregroundColor: Colors.white,
+                        ),
+                        body: Center(
+                          child: InteractiveViewer(
+                            minScale: 0.8,
+                            maxScale: 4.0,
+                            child: Image.network(
+                              imageUrlFromMessage(text),
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.network(
+                      imageUrlFromMessage(text),
+                    width: 230,
+                    height: 230,
+                    fit: BoxFit.cover,
+                    loadingBuilder:
+                        (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
 
-                    return const SizedBox(
+                      return const SizedBox(
                       width: 230,
                       height: 230,
                       child: Center(
                         child: CircularProgressIndicator(),
                       ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return const SizedBox(
-                      width: 230,
-                      height: 230,
-                      child: Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          size: 40,
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return const SizedBox(
+                        width: 230,
+                        height: 230,
+                        child: Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            size: 40,
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               )
             : Column(

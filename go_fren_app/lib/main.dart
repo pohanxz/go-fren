@@ -2029,7 +2029,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
               ),
             ),
-            ),
+          ),
+          Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -2053,7 +2054,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       ),
     );
   }
-
   Widget _actionButton({
     required IconData icon,
     required Color color,

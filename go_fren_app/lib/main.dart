@@ -1412,6 +1412,20 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         }
       }
 
+      final likedResponse = await Supabase.instance.client
+          .from('likes')
+          .select('liked_user_id')
+          .eq('user_id', user.id);
+
+      final likedIds = <String>{};
+
+      for (final item in likedResponse as List) {
+        final likedUserId = item['liked_user_id'] as String?;
+        if (likedUserId != null) {
+          likedIds.add(likedUserId);
+        }
+      }
+
       final response = await Supabase.instance.client
           .rpc('get_discoverable_profiles');
 
@@ -1420,7 +1434,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       for (final item in response as List) {
         final id = item['id'] as String;
 
-        if (blockedIds.contains(id)) continue;
+        if (blockedIds.contains(id) || likedIds.contains(id)) continue;
 
         final birthDateText = item['birth_date'] as String?;
         final birthDate = birthDateText != null
@@ -2853,8 +2867,7 @@ class _ChatScreenState extends State<ChatScreen> {
               column: 'match_id',
               value: matchId!,
             ),
-            callback: (payload) {
-              if (!mounted) return;
+            callback: (payload) async {
 
               final newMessage =
                   Map<String, dynamic>.from(payload.newRecord);
@@ -2876,15 +2889,53 @@ class _ChatScreenState extends State<ChatScreen> {
 
               if (currentUser != null &&
                   newMessage['sender_id']?.toString() != currentUser.id) {
-                markMessagesAsRead();
+                try {
+                  await Supabase.instance.client
+                      .from('messages')
+                      .update({
+                    'delivered_at':
+                        DateTime.now().toUtc().toIso8601String(),
+                  })
+                      .eq('id', messageId)
+                      .isFilter('delivered_at', null);
+                } catch (_) {
+                  // Delivery status should not interrupt the chat.
+                }
+
+                await markMessagesAsRead();
               }
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'messages',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'match_id',
+            ),
+            callback: (payload) {
+
+              final updatedMessage =
+                  Map<String, dynamic>.from(payload.newRecord);
+              final messageId = updatedMessage['id'];
+
+              final index = messages.indexWhere(
+                (item) => item['id'] == messageId,
+              );
+
+              if (index == -1) return;
+
+              setState(() {
+                messages[index] = updatedMessage;
+              });
             },
           )
           .subscribe();
 
       final messageResponse = await Supabase.instance.client
           .from('messages')
-          .select('id, sender_id, message, created_at, read_at')
+          .select('id, sender_id, message, created_at, delivered_at, read_at')
           .eq('match_id', matchId!)
           .order('created_at', ascending: true);
 
@@ -3450,14 +3501,33 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    formatTime(item['created_at']),
-                    style: TextStyle(
-                      color: isMe
-                          ? Colors.white70
-                          : Colors.black45,
-                      fontSize: 10,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatTime(item['created_at']),
+                        style: TextStyle(
+                          color: isMe
+                              ? Colors.white70
+                              : Colors.black45,
+                          fontSize: 10,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          item['read_at'] != null
+                              ? Icons.done_all
+                              : item['delivered_at'] != null
+                                  ? Icons.done_all
+                                  : Icons.done,
+                          size: 14,
+                          color: item['read_at'] != null
+                              ? Colors.lightBlueAccent
+                              : Colors.white70,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

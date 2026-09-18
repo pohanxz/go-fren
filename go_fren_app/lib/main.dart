@@ -1749,6 +1749,29 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: TextButton(
+                          onPressed: () {
+                            selectedShowMe = 'both';
+                            selectedMinAge = 18;
+                            selectedMaxAge = 100;
+                            selectedDistance = 50;
+                            Navigator.pop(
+                              sheetContext,
+                              true,
+                            );
+                          },
+                          child: const Text(
+                            'RESET FILTERS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

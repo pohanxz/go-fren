@@ -2978,6 +2978,41 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> unmatchUser() async {
+    if (matchId == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('matches')
+          .delete()
+          .eq('id', matchId!);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Match removed.'),
+        ),
+      );
+
+      Navigator.pop(context);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to remove match. Please try again.'),
+        ),
+      );
+    }
+  }
+
   Future<void> reportUser() async {
     final user = Supabase.instance.client.auth.currentUser;
     final reportedUserId = widget.profile.id;
@@ -3458,6 +3493,32 @@ class _ChatScreenState extends State<ChatScreen> {
             onSelected: (value) async {
               if (value == 'report') {
                 await reportUser();
+              } else if (value == 'unmatch') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) {
+                    return AlertDialog(
+                      title: const Text('Unmatch user?'),
+                      content: Text(
+                        'Your match and chat history with ${widget.profile.name} will be removed.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Unmatch'),
+                        ),
+                      ],
+                    );
+                  },
+                );
+
+                if (confirmed == true) {
+                  await unmatchUser();
+                }
               } else if (value == 'block') {
                 final confirmed = await showDialog<bool>(
                   context: context,
@@ -3487,6 +3548,16 @@ class _ChatScreenState extends State<ChatScreen> {
               }
             },
             itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'unmatch',
+                child: Row(
+                  children: [
+                    Icon(Icons.heart_broken_outlined),
+                    SizedBox(width: 10),
+                    Text('Unmatch'),
+                  ],
+                ),
+              ),
               PopupMenuItem<String>(
                 value: 'block',
                 child: Row(

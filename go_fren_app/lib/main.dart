@@ -295,8 +295,6 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
                   ),
                 ),
               ),
-              ),
-            ),
               const SizedBox(height: 16),
               TextField(
                 controller: confirmPasswordController,
@@ -621,9 +619,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Email',
                   prefixIcon: Icon(Icons.email_outlined),
-                ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
               TextField(
                 controller: passwordController,
                 obscureText: true,

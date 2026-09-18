@@ -2029,7 +2029,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
               ),
             ),
-          Padding(
+            ),
             padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -1902,7 +1902,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOut,
                   transform: Matrix4.identity()
-                    ..translateByDouble(swipeOffset, 0, 0)
+                    ..translateByDouble(swipeOffset, 0, 0, 1)
                     ..rotateZ(swipeRotation),
                   child: Stack(
                     fit: StackFit.expand,
@@ -2028,7 +2028,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         ),
                       ),
                     ],
-                      ),
                     ],
                   ),
                 ),

@@ -1413,9 +1413,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       }
 
       final response = await Supabase.instance.client
-          .from('profiles')
-          .select('id, name, bio, birth_date, city, avatar_url')
-          .neq('id', user.id);
+          .rpc('get_discoverable_profiles');
 
       final loadedProfiles = <Profile>[];
 

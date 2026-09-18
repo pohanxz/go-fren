@@ -1396,12 +1396,21 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     try {
       final blockedResponse = await Supabase.instance.client
           .from('blocks')
-          .select('blocked_id')
-          .eq('blocker_id', user.id);
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
 
-      final blockedIds = (blockedResponse as List)
-          .map((item) => item['blocked_id'] as String)
-          .toSet();
+      final blockedIds = <String>{};
+
+      for (final item in blockedResponse as List) {
+        final blockerId = item['blocker_id'] as String;
+        final blockedId = item['blocked_id'] as String;
+
+        if (blockerId == user.id) {
+          blockedIds.add(blockedId);
+        } else if (blockedId == user.id) {
+          blockedIds.add(blockerId);
+        }
+      }
 
       final response = await Supabase.instance.client
           .from('profiles')
@@ -2143,12 +2152,21 @@ class _MatchesScreenState extends State<MatchesScreen> {
       }
         final blockedResponse = await Supabase.instance.client
             .from('blocks')
-            .select('blocked_id')
-            .eq('blocker_id', user.id);
+            .select('blocker_id, blocked_id')
+            .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
 
-        final blockedIds = (blockedResponse as List)
-            .map((item) => item['blocked_id'] as String)
-            .toSet();
+        final blockedIds = <String>{};
+
+        for (final item in blockedResponse as List) {
+          final blockerId = item['blocker_id'] as String;
+          final blockedId = item['blocked_id'] as String;
+
+          if (blockerId == user.id) {
+            blockedIds.add(blockedId);
+          } else if (blockedId == user.id) {
+            blockedIds.add(blockerId);
+          }
+        }
 
         matchIds.removeWhere((id) => blockedIds.contains(id));
 
@@ -2320,12 +2338,21 @@ class _ChatsScreenState extends State<ChatsScreen> {
     try {
       final blockedResponse = await Supabase.instance.client
           .from('blocks')
-          .select('blocked_id')
-          .eq('blocker_id', user.id);
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
 
-      final blockedIds = (blockedResponse as List)
-          .map((item) => item['blocked_id'] as String)
-          .toSet();
+      final blockedIds = <String>{};
+
+      for (final item in blockedResponse as List) {
+        final blockerId = item['blocker_id'] as String;
+        final blockedId = item['blocked_id'] as String;
+
+        if (blockerId == user.id) {
+          blockedIds.add(blockedId);
+        } else if (blockedId == user.id) {
+          blockedIds.add(blockerId);
+        }
+      }
 
       final matchResponse = await Supabase.instance.client
           .from('matches')

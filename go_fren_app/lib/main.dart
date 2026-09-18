@@ -51,46 +51,11 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
       if (data.event == AuthChangeEvent.initialSession ||
           data.event == AuthChangeEvent.signedIn) {
-        _updateUserLocation();
+        updateCurrentUserLocation();
       }
     });
   }
 
-  Future<void> _updateUserLocation() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
-
-      var permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      await Supabase.instance.client.from('user_locations').upsert({
-        'user_id': user.id,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {
-      // Location is optional and should not interrupt the app.
-    }
-  }
 
   @override
   void dispose() {
@@ -136,6 +101,42 @@ class _GoFrenAppState extends State<GoFrenApp> {
           : const SplashScreen(),
     );
   }
+}
+
+Future<void> updateCurrentUserLocation() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      await Supabase.instance.client.from('user_locations').upsert({
+        'user_id': user.id,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // Location is optional and should not interrupt the app.
+    }
 }
 
 // ============================================================
@@ -357,6 +358,7 @@ class Profile {
   final String bio;
   final String imageUrl;
   final List<String> interests;
+  final double? distanceKm;
 
   const Profile({
     this.id,
@@ -366,35 +368,11 @@ class Profile {
     required this.bio,
     required this.imageUrl,
     required this.interests,
+    this.distanceKm,
   });
 }
 
-const demoProfiles = <Profile>[
-  Profile(
-    name: 'Sarah',
-    age: 24,
-    city: 'Jakarta',
-    bio: 'Love good conversations, music, food and exploring new places.',
-    imageUrl: 'https://i.pravatar.cc/600?img=47',
-    interests: ['Music', 'Travel', 'Food'],
-  ),
-  Profile(
-    name: 'Maya',
-    age: 26,
-    city: 'Depok',
-    bio: 'Coffee lover, movie fan and always looking for something new.',
-    imageUrl: 'https://i.pravatar.cc/600?img=32',
-    interests: ['Movies', 'Food', 'Photography'],
-  ),
-  Profile(
-    name: 'Nadia',
-    age: 23,
-    city: 'Tangerang',
-    bio: 'Gaming, books and weekend adventures.',
-    imageUrl: 'https://i.pravatar.cc/600?img=44',
-    interests: ['Gaming', 'Books', 'Travel'],
-  ),
-];
+
 
 // ============================================================
 // SPLASH
@@ -1420,10 +1398,48 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   List<Profile> profiles = [];
   bool isLoading = true;
 
+  String showMe = 'both';
+  double minAge = 18;
+  double maxAge = 100;
+  double maxDistanceKm = 50;
+
   @override
   void initState() {
     super.initState();
-    loadProfiles();
+    _initializeDiscovery();
+  }
+
+  Future<void> _initializeDiscovery() async {
+    await loadDiscoveryPreferences();
+    await updateCurrentUserLocation();
+    await loadProfiles();
+  }
+
+  Future<void> loadDiscoveryPreferences() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('discovery_preferences')
+          .select('show_me, min_age, max_age, max_distance_km')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      if (response == null) return;
+
+      if (!mounted) return;
+
+      setState(() {
+        showMe = response['show_me'] as String? ?? 'both';
+        minAge = (response['min_age'] as num?)?.toDouble() ?? 18;
+        maxAge = (response['max_age'] as num?)?.toDouble() ?? 100;
+        maxDistanceKm =
+            (response['max_distance_km'] as num?)?.toDouble() ?? 50;
+      });
+    } catch (_) {
+      // Use defaults if preferences cannot be loaded.
+    }
   }
 
   Future<void> loadProfiles() async {
@@ -1436,38 +1452,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
 
     try {
-      final blockedResponse = await Supabase.instance.client
-          .from('blocks')
-          .select('blocker_id, blocked_id')
-          .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
-
-      final blockedIds = <String>{};
-
-      for (final item in blockedResponse as List) {
-        final blockerId = item['blocker_id'] as String;
-        final blockedId = item['blocked_id'] as String;
-
-        if (blockerId == user.id) {
-          blockedIds.add(blockedId);
-        } else if (blockedId == user.id) {
-          blockedIds.add(blockerId);
-        }
-      }
-
-      final likedResponse = await Supabase.instance.client
-          .from('likes')
-          .select('liked_user_id')
-          .eq('user_id', user.id);
-
-      final likedIds = <String>{};
-
-      for (final item in likedResponse as List) {
-        final likedUserId = item['liked_user_id'] as String?;
-        if (likedUserId != null) {
-          likedIds.add(likedUserId);
-        }
-      }
-
       final response = await Supabase.instance.client
           .rpc('get_discoverable_profiles');
 
@@ -1475,8 +1459,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
       for (final item in response as List) {
         final id = item['id'] as String;
-
-        if (blockedIds.contains(id) || likedIds.contains(id)) continue;
 
         final birthDateText = item['birth_date'] as String?;
         final birthDate = birthDateText != null
@@ -1493,15 +1475,21 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
           age--;
         }
 
+        final distanceValue = item['distance_km'];
+        final distanceKm = distanceValue is num
+            ? distanceValue.toDouble()
+            : null;
+
         loadedProfiles.add(
           Profile(
-          id: id,
+            id: id,
             name: item['name'] as String? ?? 'Unknown',
             age: age,
             city: item['city'] as String? ?? '',
             bio: item['bio'] as String? ?? '',
             imageUrl: item['avatar_url'] as String? ?? '',
             interests: const [],
+            distanceKm: distanceKm,
           ),
         );
       }
@@ -1591,6 +1579,212 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
   }
 
+
+  Future<void> saveDiscoveryPreferences() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await Supabase.instance.client
+          .from('discovery_preferences')
+          .upsert({
+        'user_id': user.id,
+        'show_me': showMe,
+        'min_age': minAge.round(),
+        'max_age': maxAge.round(),
+        'max_distance_km': maxDistanceKm,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      rethrow;
+    }
+  }
+
+  Future<void> showDiscoveryFilters() async {
+    var selectedShowMe = showMe;
+    var selectedMinAge = minAge;
+    var selectedMaxAge = maxAge;
+    var selectedDistance = maxDistanceKm;
+
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  20,
+                  24,
+                  20 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text(
+                            'Discovery Filters',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(sheetContext),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Show me',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                            value: 'male',
+                            label: Text('Male'),
+                            icon: Icon(Icons.male),
+                          ),
+                          ButtonSegment(
+                            value: 'female',
+                            label: Text('Female'),
+                            icon: Icon(Icons.female),
+                          ),
+                          ButtonSegment(
+                            value: 'both',
+                            label: Text('Both'),
+                            icon: Icon(Icons.people_alt_outlined),
+                          ),
+                        ],
+                        selected: {selectedShowMe},
+                        onSelectionChanged: (selection) {
+                          setSheetState(() {
+                            selectedShowMe = selection.first;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 25),
+                      Text(
+                        'Age: ${selectedMinAge.round()} - ${selectedMaxAge.round()}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      RangeSlider(
+                        min: 18,
+                        max: 100,
+                        divisions: 82,
+                        values: RangeValues(
+                          selectedMinAge,
+                          selectedMaxAge,
+                        ),
+                        labels: RangeLabels(
+                          selectedMinAge.round().toString(),
+                          selectedMaxAge.round().toString(),
+                        ),
+                        onChanged: (values) {
+                          setSheetState(() {
+                            selectedMinAge = values.start;
+                            selectedMaxAge = values.end;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      Text(
+                        'Maximum distance: ${selectedDistance.round()} km',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Slider(
+                        min: 1,
+                        max: 500,
+                        divisions: 499,
+                        value: selectedDistance,
+                        label: '${selectedDistance.round()} km',
+                        onChanged: (value) {
+                          setSheetState(() {
+                            selectedDistance = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(
+                            sheetContext,
+                            true,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6C5CE7),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: const Text(
+                            'APPLY FILTERS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (applied != true || !mounted) return;
+
+    setState(() {
+      showMe = selectedShowMe;
+      minAge = selectedMinAge;
+      maxAge = selectedMaxAge;
+      maxDistanceKm = selectedDistance;
+      isLoading = true;
+    });
+
+    try {
+      await saveDiscoveryPreferences();
+      await updateCurrentUserLocation();
+      await loadProfiles();
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save discovery filters.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -1632,8 +1826,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 ),
                 const Spacer(),
                 IconButton(
-                  onPressed: () {},
+                  onPressed: showDiscoveryFilters,
                   icon: const Icon(Icons.tune),
+                  tooltip: 'Discovery filters',
                 ),
               ],
             ),
@@ -1706,19 +1901,39 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                             const SizedBox(height: 5),
                             Row(
                               children: [
-                                const Icon(
-                                  Icons.location_on,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  profile.city,
-                                  style: const TextStyle(
+                                if (profile.city.isNotEmpty) ...[
+                                  const Icon(
+                                    Icons.location_on,
                                     color: Colors.white,
-                                    fontSize: 15,
+                                    size: 18,
                                   ),
-                                ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    profile.city,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                                if (profile.city.isNotEmpty &&
+                                    profile.distanceKm != null)
+                                  const SizedBox(width: 12),
+                                if (profile.distanceKm != null) ...[
+                                  const Icon(
+                                    Icons.near_me,
+                                    color: Colors.white,
+                                    size: 17,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${profile.distanceKm!.toStringAsFixed(1)} km away',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                             const SizedBox(height: 10),

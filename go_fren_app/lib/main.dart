@@ -1398,6 +1398,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   List<Profile> profiles = [];
   bool isLoading = true;
 
+  double swipeOffset = 0;
+  double swipeRotation = 0;
+
   String showMe = 'both';
   double minAge = 18;
   double maxAge = 100;
@@ -1847,15 +1850,72 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     ),
                   );
                 },
-                child: Card(
-                  clipBehavior: Clip.antiAlias,
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
-                  ),
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    swipeOffset += details.delta.dx;
+                    swipeRotation = swipeOffset / 900;
+                  });
+                },
+                onHorizontalDragEnd: (details) {
+                  if (swipeOffset > 120) {
+                    setState(() {
+                      swipeOffset = 500;
+                      swipeRotation = 0.15;
+                    });
+
+                    Future.delayed(
+                      const Duration(milliseconds: 180),
+                      () {
+                        if (!mounted) return;
+                        like();
+                        setState(() {
+                          swipeOffset = 0;
+                          swipeRotation = 0;
+                        });
+                      },
+                    );
+                  } else if (swipeOffset < -120) {
+                    setState(() {
+                      swipeOffset = -500;
+                      swipeRotation = -0.15;
+                    });
+
+                    Future.delayed(
+                      const Duration(milliseconds: 180),
+                      () {
+                        if (!mounted) return;
+                        skip();
+                        setState(() {
+                          swipeOffset = 0;
+                          swipeRotation = 0;
+                        });
+                      },
+                    );
+                  } else {
+                    setState(() {
+                      swipeOffset = 0;
+                      swipeRotation = 0;
+                    });
+                  }
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
+                  transform: Matrix4.identity()
+                    ..translate(swipeOffset)
+                    ..rotateZ(swipeRotation),
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
+                      Card(
+                        clipBehavior: Clip.antiAlias,
+                        elevation: 5,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
                       Image.network(
                         profile.imageUrl,
                         fit: BoxFit.cover,
@@ -1966,6 +2026,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                             ),
                           ],
                         ),
+                      ),
+                    ],
+                        ],
                       ),
                     ],
                   ),

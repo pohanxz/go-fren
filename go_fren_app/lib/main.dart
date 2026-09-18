@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
@@ -47,7 +48,48 @@ class _GoFrenAppState extends State<GoFrenApp> {
           );
         });
       }
+
+      if (data.event == AuthChangeEvent.initialSession ||
+          data.event == AuthChangeEvent.signedIn) {
+        _updateUserLocation();
+      }
     });
+  }
+
+  Future<void> _updateUserLocation() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      var permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      await Supabase.instance.client.from('user_locations').upsert({
+        'user_id': user.id,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // Location is optional and should not interrupt the app.
+    }
   }
 
   @override

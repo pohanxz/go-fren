@@ -1898,134 +1898,132 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     });
                   }
                 },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  child: Transform.translate(
-                    offset: Offset(swipeOffset, 0),
-                    child: Transform.rotate(
-                      angle: swipeRotation,
-                      child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    elevation: 5,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(
-                          profile.imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey.shade300,
-                              child: const Icon(
-                                Icons.person,
-                                size: 100,
-                                color: Colors.white,
+                child: Transform.translate(
+                  offset: Offset(swipeOffset, 0),
+                  child: Transform.rotate(
+                    angle: swipeRotation,
+                    child: Card(
+                      clipBehavior: Clip.antiAlias,
+                      elevation: 5,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.network(
+                            profile.imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade300,
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 100,
+                                  color: Colors.white,
+                                ),
+                              );
+                            },
+                          ),
+                          Container(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black87,
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                stops: [0.48, 1],
                               ),
-                            );
-                          },
-                        ),
-                        Container(
-                          decoration: const BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.transparent,
-                                Colors.black87,
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              stops: [0.48, 1],
                             ),
                           ),
-                        ),
-                        Positioned(
-                          left: 20,
-                          right: 20,
-                          bottom: 25,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${profile.name}, ${profile.age}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 29,
-                                  fontWeight: FontWeight.bold,
+                          Positioned(
+                            left: 20,
+                            right: 20,
+                            bottom: 25,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${profile.name}, ${profile.age}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 29,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 5),
-                              Row(
-                                children: [
-                                  if (profile.city.isNotEmpty) ...[
-                                    const Icon(
-                                      Icons.location_on,
-                                      color: Colors.white,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      profile.city,
-                                      style: const TextStyle(
+                                const SizedBox(height: 5),
+                                Row(
+                                  children: [
+                                    if (profile.city.isNotEmpty) ...[
+                                      const Icon(
+                                        Icons.location_on,
                                         color: Colors.white,
-                                        fontSize: 15,
+                                        size: 18,
                                       ),
-                                    ),
-                                  ],
-                                  if (profile.city.isNotEmpty &&
-                                      profile.distanceKm != null)
-                                    const SizedBox(width: 12),
-                                  if (profile.distanceKm != null) ...[
-                                    const Icon(
-                                      Icons.near_me,
-                                      color: Colors.white,
-                                      size: 17,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${profile.distanceKm!.toStringAsFixed(1)} km away',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                profile.bio,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Wrap(
-                                spacing: 6,
-                                children: profile.interests
-                                    .map(
-                                      (item) => Chip(
-                                        label: Text(
-                                          item,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                          ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        profile.city,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
                                         ),
-                                        visualDensity:
-                                            VisualDensity.compact,
                                       ),
-                                    )
-                                    .toList(),
-                              ),
-                            ],
+                                    ],
+                                    if (profile.city.isNotEmpty &&
+                                        profile.distanceKm != null)
+                                      const SizedBox(width: 12),
+                                    if (profile.distanceKm != null) ...[
+                                      const Icon(
+                                        Icons.near_me,
+                                        color: Colors.white,
+                                        size: 17,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${profile.distanceKm!.toStringAsFixed(1)} km away',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  profile.bio,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 6,
+                                  children: profile.interests
+                                      .map(
+                                        (item) => Chip(
+                                          label: Text(
+                                            item,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          visualDensity:
+                                              VisualDensity.compact,
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),

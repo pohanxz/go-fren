@@ -3423,14 +3423,26 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: widget.profile.imageUrl.isNotEmpty
-                  ? NetworkImage(widget.profile.imageUrl)
-                  : null,
-              child: widget.profile.imageUrl.isEmpty
-                  ? const Icon(Icons.person, size: 18)
-                  : null,
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProfileDetailScreen(
+                      profile: widget.profile,
+                    ),
+                  ),
+                );
+              },
+              child: CircleAvatar(
+                radius: 18,
+                backgroundImage: widget.profile.imageUrl.isNotEmpty
+                    ? NetworkImage(widget.profile.imageUrl)
+                    : null,
+                child: widget.profile.imageUrl.isEmpty
+                    ? const Icon(Icons.person, size: 18)
+                    : null,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(

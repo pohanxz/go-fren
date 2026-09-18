@@ -1836,6 +1836,32 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ],
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.filter_alt_outlined,
+                  size: 17,
+                  color: Colors.grey,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${showMe == 'both' ? 'Everyone' : showMe == 'male' ? 'Male' : 'Female'} · '
+                    '${minAge.round()}–${maxAge.round()} · '
+                    '≤ ${maxDistanceKm.round()} km',
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 5, 16, 15),

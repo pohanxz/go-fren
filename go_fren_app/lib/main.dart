@@ -1448,6 +1448,9 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int currentIndex = 0;
+  int matchCount = 0;
+
+  RealtimeChannel? _matchesBadgeChannel;
 
   final pages = const [
     DiscoveryScreen(),
@@ -1455,6 +1458,80 @@ class _MainNavigationState extends State<MainNavigation> {
     ChatsScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    loadMatchCount();
+    _subscribeToMatchCount();
+  }
+
+  Future<void> loadMatchCount() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      final response = await Supabase.instance.client
+          .from('matches')
+          .select('id')
+          .or('user_id.eq.${user.id},matched_user_id.eq.${user.id}');
+
+      if (!mounted) return;
+
+      setState(() {
+        matchCount = (response as List).length;
+      });
+    } catch (_) {
+      // Badge count is optional and should not interrupt navigation.
+    }
+  }
+
+  void _subscribeToMatchCount() {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    _matchesBadgeChannel = Supabase.instance.client
+        .channel('matches-badge-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'matches',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: user.id,
+          ),
+          callback: (_) {
+            loadMatchCount();
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'matches',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'matched_user_id',
+            value: user.id,
+          ),
+          callback: (_) {
+            loadMatchCount();
+          },
+        )
+        .subscribe();
+  }
+
+  Widget _matchBadgeIcon(IconData icon) {
+    return Badge(
+      isLabelVisible: matchCount > 0,
+      label: Text(
+        matchCount > 99 ? '99+' : '$matchCount',
+      ),
+      child: Icon(icon),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1474,8 +1551,8 @@ class _MainNavigationState extends State<MainNavigation> {
             label: 'Discover',
           ),
           NavigationDestination(
-            icon: Icon(Icons.favorite_border),
-            selectedIcon: Icon(Icons.favorite),
+            icon: _matchBadgeIcon(Icons.favorite_border),
+            selectedIcon: _matchBadgeIcon(Icons.favorite),
             label: 'Matches',
           ),
           NavigationDestination(
@@ -1491,6 +1568,14 @@ class _MainNavigationState extends State<MainNavigation> {
         ],
       ),
     );
+  @override
+  void dispose() {
+    if (_matchesBadgeChannel != null) {
+      Supabase.instance.client.removeChannel(_matchesBadgeChannel!);
+    }
+    super.dispose();
+  }
+
   }
 }
 

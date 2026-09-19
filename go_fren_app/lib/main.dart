@@ -1598,6 +1598,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   double swipeOffset = 0;
   double swipeRotation = 0;
 
+  final List<Profile> skippedProfiles = [];
+
   String showMe = 'both';
   double minAge = 18;
   double maxAge = 100;
@@ -1715,11 +1717,34 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }
 
   void skip() {
+    if (profiles.isEmpty) {
+      return;
+    }
+
     setState(() {
+      skippedProfiles.add(profiles[currentProfile]);
+
       if (currentProfile < profiles.length - 1) {
         currentProfile++;
       } else {
         currentProfile = 0;
+      }
+    });
+  }
+
+  void rewind() {
+    if (skippedProfiles.isEmpty || profiles.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      final previousProfile = skippedProfiles.removeLast();
+      final existingIndex = profiles.indexWhere(
+        (profile) => profile.id == previousProfile.id,
+      );
+
+      if (existingIndex >= 0) {
+        currentProfile = existingIndex;
       }
     });
   }
@@ -2461,6 +2486,14 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                _actionButton(
+                  icon: Icons.undo_rounded,
+                  color: skippedProfiles.isEmpty
+                      ? Colors.grey
+                      : const Color(0xFFFFA726),
+                  onTap: skippedProfiles.isEmpty ? () {} : rewind,
+                ),
+                const SizedBox(width: 20),
                 _actionButton(
                   icon: Icons.close,
                   color: Colors.red,

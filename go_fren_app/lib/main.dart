@@ -1777,6 +1777,19 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         );
       }
 
+      final superLikedProfiles = loadedProfiles
+          .where((profile) => incomingSuperLikeIds.contains(profile.id))
+          .toList();
+
+      final regularProfiles = loadedProfiles
+          .where((profile) => !incomingSuperLikeIds.contains(profile.id))
+          .toList();
+
+      loadedProfiles
+        ..clear()
+        ..addAll(superLikedProfiles)
+        ..addAll(regularProfiles);
+
       if (!mounted) return;
 
       setState(() {

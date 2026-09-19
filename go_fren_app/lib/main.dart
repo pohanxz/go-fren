@@ -1601,6 +1601,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   final List<Profile> skippedProfiles = [];
   final Set<String> incomingSuperLikeIds = {};
 
+  RealtimeChannel? _superLikesChannel;
+
   String showMe = 'both';
   double minAge = 18;
   double maxAge = 100;
@@ -1610,6 +1612,46 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   void initState() {
     super.initState();
     _initializeDiscovery();
+    _subscribeToIncomingSuperLikes();
+  }
+
+  void _subscribeToIncomingSuperLikes() {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    _superLikesChannel = Supabase.instance.client
+        .channel('incoming-super-likes-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'likes',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'liked_user_id',
+            value: user.id,
+          ),
+          callback: (payload) {
+            final record = payload.newRecord;
+
+            if (record['is_super_like'] != true) {
+              return;
+            }
+
+            final senderId = record['user_id'] as String?;
+
+            if (senderId == null || !mounted) {
+              return;
+            }
+
+            setState(() {
+              incomingSuperLikeIds.add(senderId);
+            });
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _initializeDiscovery() async {
@@ -3010,6 +3052,16 @@ class ProfileDetailScreen extends StatelessWidget {
 
   }
 
+}
+
+  @override
+  void dispose() {
+    if (_superLikesChannel != null) {
+      Supabase.instance.client.removeChannel(_superLikesChannel!);
+    }
+
+    super.dispose();
+  }
 }
 
 // ============================================================

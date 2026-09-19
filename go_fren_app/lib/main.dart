@@ -2479,14 +2479,25 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   }) {
     return Material(
       color: Colors.white,
-      elevation: 4,
+      elevation: 6,
+      shadowColor: color.withValues(alpha: 0.18),
       shape: const CircleBorder(),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: SizedBox(
+        splashColor: color.withValues(alpha: 0.12),
+        highlightColor: color.withValues(alpha: 0.06),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
           width: size,
           height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: color.withValues(alpha: 0.15),
+              width: 1.5,
+            ),
+          ),
           child: Icon(
             icon,
             color: color,

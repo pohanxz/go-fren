@@ -3049,8 +3049,8 @@ class ProfileDetailScreen extends StatelessWidget {
         ],
       ),
     );
+
   }
-}
 
   @override
   void dispose() {

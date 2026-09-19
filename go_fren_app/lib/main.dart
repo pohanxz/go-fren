@@ -1749,6 +1749,64 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
   }
 
+  Future<void> superLike() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final profile = profiles[currentProfile];
+
+    if (user == null || profile.id == null) {
+      return;
+    }
+
+    try {
+      await Supabase.instance.client.from('likes').insert({
+        'user_id': user.id,
+        'liked_user_id': profile.id,
+        'is_super_like': true,
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('You super liked ${profile.name}!'),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+
+      setState(() {
+        if (currentProfile < profiles.length - 1) {
+          currentProfile++;
+        } else {
+          currentProfile = 0;
+        }
+      });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == '23505') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You already liked this profile.'),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to super like: ${e.message}'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to super like.'),
+        ),
+      );
+    }
+  }
+
   Future<void> like() async {
     final user = Supabase.instance.client.auth.currentUser;
     final profile = profiles[currentProfile];
@@ -2499,7 +2557,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   color: Colors.red,
                   onTap: skip,
                 ),
-                const SizedBox(width: 35),
+                const SizedBox(width: 18),
+                _actionButton(
+                  icon: Icons.star_rounded,
+                  color: const Color(0xFFFFC107),
+                  onTap: superLike,
+                ),
+                const SizedBox(width: 18),
                 _actionButton(
                   icon: Icons.favorite,
                   color: const Color(0xFF6C5CE7),

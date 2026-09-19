@@ -2702,10 +2702,31 @@ class _MatchesScreenState extends State<MatchesScreen> {
   List<Profile> matches = [];
   bool isLoading = true;
 
+  RealtimeChannel? _matchesChannel;
+
   @override
   void initState() {
     super.initState();
     loadMatches();
+    _subscribeToMatches();
+  }
+
+  void _subscribeToMatches() {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) return;
+
+    _matchesChannel = Supabase.instance.client
+        .channel('matches-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'matches',
+          callback: (payload) {
+            loadMatches();
+          },
+        )
+        .subscribe();
   }
 
   Future<void> loadMatches() async {
@@ -2815,6 +2836,14 @@ class _MatchesScreenState extends State<MatchesScreen> {
         ),
       );
     }
+  }
+
+  @override
+  void dispose() {
+    if (_matchesChannel != null) {
+      Supabase.instance.client.removeChannel(_matchesChannel!);
+    }
+    super.dispose();
   }
 
   @override

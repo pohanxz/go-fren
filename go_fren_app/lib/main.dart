@@ -2329,6 +2329,43 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               ],
             ),
           ),
+          if (showIncomingSuperLikeBanner)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFC107).withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFFFC107).withValues(alpha: 0.45),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.star_rounded,
+                      color: Color(0xFFFFC107),
+                      size: 26,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Someone Super Liked You!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 5, 16, 15),

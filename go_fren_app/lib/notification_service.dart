@@ -13,6 +13,11 @@ class NotificationService {
   static const String channelDescription =
       'Notifications for new Go Fren matches.';
 
+  static const String chatChannelId = 'gofren_messages';
+  static const String chatChannelName = 'Go Fren Messages';
+  static const String chatChannelDescription =
+      'Notifications for new Go Fren messages.';
+
   bool _initialized = false;
 
   Future<void> initialize() async {
@@ -37,11 +42,19 @@ class NotificationService {
       importance: Importance.high,
     );
 
+    const chatChannel = AndroidNotificationChannel(
+      chatChannelId,
+      chatChannelName,
+      description: chatChannelDescription,
+      importance: Importance.high,
+    );
+
     final androidPlugin =
         plugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
     await androidPlugin?.createNotificationChannel(channel);
+    await androidPlugin?.createNotificationChannel(chatChannel);
 
     _initialized = true;
   }
@@ -99,6 +112,43 @@ class NotificationService {
       body: 'You matched with $name.',
       notificationDetails: details,
       payload: 'match',
+    );
+  }
+
+  Future<void> showMessageNotification({
+    required String name,
+    required String message,
+  }) async {
+    await initialize();
+
+    const androidDetails = AndroidNotificationDetails(
+      chatChannelId,
+      chatChannelName,
+      channelDescription: chatChannelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+    );
+
+    final notificationId =
+        DateTime.now().millisecondsSinceEpoch.remainder(2147483647);
+
+    final displayMessage = message.startsWith('image:')
+        ? '📷 Sent a photo'
+        : message;
+
+    await plugin.show(
+      id: notificationId,
+      title: 'New message from $name',
+      body: displayMessage,
+      notificationDetails: details,
+      payload: 'message',
     );
   }
 

@@ -36,7 +36,10 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
   RealtimeChannel? _globalMatchesChannel;
   String? _globalMatchesUserId;
+  RealtimeChannel? _globalMessagesChannel;
+  String? _globalMessagesUserId;
   final Set<String> _notifiedMatchKeys = <String>{};
+  final Set<String> _notifiedMessageIds = <String>{};
 
   @override
   void initState() {
@@ -65,11 +68,13 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
         if (user != null) {
           _subscribeToGlobalMatchNotifications(user.id);
+          _subscribeToGlobalMessageNotifications(user.id);
         }
       }
 
       if (data.event == AuthChangeEvent.signedOut) {
         _unsubscribeFromGlobalMatchNotifications();
+        _unsubscribeFromGlobalMessageNotifications();
       }
     });
   }
@@ -130,6 +135,147 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
     if (channel != null) {
       Supabase.instance.client.removeChannel(channel);
+    }
+  }
+
+  void _subscribeToGlobalMessageNotifications(String userId) {
+    if (_globalMessagesUserId == userId &&
+        _globalMessagesChannel != null) {
+      return;
+    }
+
+    _unsubscribeFromGlobalMessageNotifications();
+
+    _globalMessagesUserId = userId;
+
+    _globalMessagesChannel = Supabase.instance.client
+        .channel('global-messages-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          callback: (payload) async {
+            await _handleGlobalMessageNotification(
+              payload,
+              userId,
+            );
+          },
+        )
+        .subscribe();
+  }
+
+  void _unsubscribeFromGlobalMessageNotifications() {
+    final channel = _globalMessagesChannel;
+
+    _globalMessagesChannel = null;
+    _globalMessagesUserId = null;
+    _notifiedMessageIds.clear();
+
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+  }
+
+  Future<void> _handleGlobalMessageNotification(
+    PostgresChangePayload payload,
+    String userId,
+  ) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+
+    if (currentUser == null || currentUser.id != userId) {
+      return;
+    }
+
+    final record = payload.newRecord;
+
+    final messageId = record['id']?.toString();
+    final senderId = record['sender_id']?.toString();
+    final matchId = record['match_id']?.toString();
+    final message = record['message']?.toString();
+
+    if (messageId == null ||
+        senderId == null ||
+        matchId == null ||
+        message == null) {
+      return;
+    }
+
+    if (senderId == userId) {
+      return;
+    }
+
+    if (_notifiedMessageIds.contains(messageId)) {
+      return;
+    }
+
+    _notifiedMessageIds.add(messageId);
+
+    try {
+      final settingResponse = await Supabase.instance.client
+          .from('notification_settings')
+          .select('enabled')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      final notificationsEnabled =
+          settingResponse?['enabled'] as bool? ?? true;
+
+      if (!notificationsEnabled) {
+        return;
+      }
+
+      final matchResponse = await Supabase.instance.client
+          .from('matches')
+          .select('user_id, matched_user_id')
+          .eq('id', matchId)
+          .maybeSingle();
+
+      if (matchResponse == null) {
+        return;
+      }
+
+      final matchUserId =
+          matchResponse['user_id']?.toString();
+      final matchedUserId =
+          matchResponse['matched_user_id']?.toString();
+
+      if (matchUserId == null || matchedUserId == null) {
+        return;
+      }
+
+      final isUserInMatch =
+          matchUserId == userId || matchedUserId == userId;
+
+      if (!isUserInMatch) {
+        return;
+      }
+
+      final senderIsMatchParticipant =
+          matchUserId == senderId || matchedUserId == senderId;
+
+      if (!senderIsMatchParticipant) {
+        return;
+      }
+
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('name')
+          .eq('id', senderId)
+          .maybeSingle();
+
+      if (profileResponse == null) {
+        return;
+      }
+
+      final name =
+          profileResponse['name'] as String? ?? 'Someone';
+
+      await NotificationService.instance.showMessageNotification(
+        name: name,
+        message: message,
+      );
+    } catch (_) {
+      // Notification errors must not interrupt the main app flow.
     }
   }
 
@@ -203,6 +349,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
   @override
   void dispose() {
     _unsubscribeFromGlobalMatchNotifications();
+    _unsubscribeFromGlobalMessageNotifications();
     authSubscription?.cancel();
     super.dispose();
   }

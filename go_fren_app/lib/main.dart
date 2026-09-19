@@ -34,6 +34,10 @@ class _GoFrenAppState extends State<GoFrenApp> {
   final navigatorKey = GlobalKey<NavigatorState>();
   bool isPasswordRecovery = false;
 
+  RealtimeChannel? _globalMatchesChannel;
+  String? _globalMatchesUserId;
+  final Set<String> _notifiedMatchKeys = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -56,13 +60,149 @@ class _GoFrenAppState extends State<GoFrenApp> {
       if (data.event == AuthChangeEvent.initialSession ||
           data.event == AuthChangeEvent.signedIn) {
         updateCurrentUserLocation();
+
+        final user = Supabase.instance.client.auth.currentUser;
+
+        if (user != null) {
+          _subscribeToGlobalMatchNotifications(user.id);
+        }
+      }
+
+      if (data.event == AuthChangeEvent.signedOut) {
+        _unsubscribeFromGlobalMatchNotifications();
       }
     });
   }
 
+  void _subscribeToGlobalMatchNotifications(String userId) {
+    if (_globalMatchesUserId == userId &&
+        _globalMatchesChannel != null) {
+      return;
+    }
+
+    _unsubscribeFromGlobalMatchNotifications();
+
+    _globalMatchesUserId = userId;
+
+    _globalMatchesChannel = Supabase.instance.client
+        .channel('global-matches-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'matches',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (payload) async {
+            await _handleGlobalMatchNotification(
+              payload,
+              userId,
+            );
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'matches',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'matched_user_id',
+            value: userId,
+          ),
+          callback: (payload) async {
+            await _handleGlobalMatchNotification(
+              payload,
+              userId,
+            );
+          },
+        )
+        .subscribe();
+  }
+
+  void _unsubscribeFromGlobalMatchNotifications() {
+    final channel = _globalMatchesChannel;
+
+    _globalMatchesChannel = null;
+    _globalMatchesUserId = null;
+    _notifiedMatchKeys.clear();
+
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
+  }
+
+  Future<void> _handleGlobalMatchNotification(
+    PostgresChangePayload payload,
+    String userId,
+  ) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+
+    if (currentUser == null || currentUser.id != userId) {
+      return;
+    }
+
+    final record = payload.newRecord;
+
+    final matchUserId = record['user_id'] as String?;
+    final matchedUserId = record['matched_user_id'] as String?;
+
+    if (matchUserId == null || matchedUserId == null) {
+      return;
+    }
+
+    final otherUserId =
+        matchUserId == userId ? matchedUserId : matchUserId;
+
+    final pair = [userId, otherUserId]..sort();
+
+    final matchKey = pair.join(':');
+
+    if (_notifiedMatchKeys.contains(matchKey)) {
+      return;
+    }
+
+    _notifiedMatchKeys.add(matchKey);
+
+    try {
+      final settingResponse = await Supabase.instance.client
+          .from('notification_settings')
+          .select('enabled')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      final notificationsEnabled =
+          settingResponse?['enabled'] as bool? ?? true;
+
+      if (!notificationsEnabled) {
+        return;
+      }
+
+      final profileResponse = await Supabase.instance.client
+          .from('profiles')
+          .select('name')
+          .eq('id', otherUserId)
+          .maybeSingle();
+
+      if (profileResponse == null) {
+        return;
+      }
+
+      final name =
+          profileResponse['name'] as String? ?? 'Someone';
+
+      await NotificationService.instance.showMatchNotification(
+        name: name,
+      );
+    } catch (_) {
+      // Notification errors must not interrupt the main app flow.
+    }
+  }
 
   @override
   void dispose() {
+    _unsubscribeFromGlobalMatchNotifications();
     authSubscription?.cancel();
     super.dispose();
   }
@@ -89,7 +229,9 @@ class _GoFrenAppState extends State<GoFrenApp> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: Colors.grey.shade200),
+            borderSide: BorderSide(
+              color: Colors.grey.shade200,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),

@@ -2042,10 +2042,54 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
 
     if (profiles.isEmpty) {
-      return const Center(
-        child: Text(
-          'No profiles available right now.',
-          style: TextStyle(fontSize: 16),
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.people_outline_rounded,
+                size: 72,
+                color: Colors.grey.shade400,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'No profiles available right now.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Try refreshing Discovery to find new people.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: refreshDiscovery,
+                icon: const Icon(Icons.refresh),
+                label: const Text('REFRESH DISCOVERY'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 13,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -2253,20 +2297,51 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                 ),
                               ),
                             ),
-                          Image.network(
-                            profile.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey.shade300,
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 100,
-                                  color: Colors.white,
+                          profile.imageUrl.isNotEmpty
+                              ? Image.network(
+                                  profile.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      decoration: const BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Color(0xFFE8E5FF),
+                                            Color(0xFFD6D0FF),
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.person_rounded,
+                                          size: 110,
+                                          color: Color(0xFF6C5CE7),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Color(0xFFE8E5FF),
+                                        Color(0xFFD6D0FF),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                  ),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.person_rounded,
+                                      size: 110,
+                                      color: Color(0xFF6C5CE7),
+                                    ),
+                                  ),
                                 ),
-                              );
-                            },
-                          ),
                           Container(
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(

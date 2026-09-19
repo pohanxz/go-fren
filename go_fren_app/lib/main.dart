@@ -1600,6 +1600,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   final List<Profile> skippedProfiles = [];
   final Set<String> incomingSuperLikeIds = {};
+  bool showIncomingSuperLikeBanner = false;
 
   String showMe = 'both';
   double minAge = 18;
@@ -1646,6 +1647,17 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
             setState(() {
               incomingSuperLikeIds.add(senderId);
+              showIncomingSuperLikeBanner = true;
+            });
+
+            Future.delayed(const Duration(milliseconds: 2500), () {
+              if (!mounted) {
+                return;
+              }
+
+              setState(() {
+                showIncomingSuperLikeBanner = false;
+              });
             });
           },
         )

@@ -1601,6 +1601,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   final List<Profile> skippedProfiles = [];
   final Set<String> incomingSuperLikeIds = {};
   bool showIncomingSuperLikeBanner = false;
+  int _superLikeBannerToken = 0;
 
   String showMe = 'both';
   double minAge = 18;
@@ -1645,13 +1646,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               return;
             }
 
+            final bannerToken = ++_superLikeBannerToken;
+
             setState(() {
               incomingSuperLikeIds.add(senderId);
               showIncomingSuperLikeBanner = true;
             });
 
             Future.delayed(const Duration(milliseconds: 2500), () {
-              if (!mounted) {
+              if (!mounted || bannerToken != _superLikeBannerToken) {
                 return;
               }
 

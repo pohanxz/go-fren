@@ -2222,54 +2222,119 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
 
     if (profiles.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.people_outline_rounded,
-                size: 72,
-                color: Colors.grey.shade400,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'No profiles available right now.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Try refreshing Discovery to find new people.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: refreshDiscovery,
-                icon: const Icon(Icons.refresh),
-                label: const Text('REFRESH DISCOVERY'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6C5CE7),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 13,
+      return SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.people_alt_rounded,
+                    color: Color(0xFF6C5CE7),
+                    size: 32,
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Go Fren',
+                    style: TextStyle(
+                      fontSize: 25,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: refreshDiscovery,
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh discovery',
+                  ),
+                  IconButton(
+                    onPressed: showDiscoveryFilters,
+                    icon: const Icon(Icons.tune),
+                    tooltip: 'Discovery filters',
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.filter_alt_outlined,
+                    size: 17,
+                    color: Colors.grey,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${showMe == 'both' ? 'Everyone' : showMe == 'male' ? 'Male' : 'Female'} · '
+                      '${minAge.round()}–${maxAge.round()} · '
+                      '≤ ${maxDistanceKm.round()} km',
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.people_outline_rounded,
+                        size: 72,
+                        color: Colors.grey.shade400,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No profiles available right now.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Try refreshing Discovery or adjusting your filters.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: refreshDiscovery,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('REFRESH DISCOVERY'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 13,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }

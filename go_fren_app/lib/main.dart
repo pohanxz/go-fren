@@ -2153,6 +2153,15 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  '${currentProfile + 1}/${profiles.length}',
+                  style: const TextStyle(
+                    color: Color(0xFF6C5CE7),
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           ),

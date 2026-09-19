@@ -26,7 +26,9 @@ class NotificationService {
       android: androidSettings,
     );
 
-    await plugin.initialize(initializationSettings);
+    await plugin.initialize(
+      settings: initializationSettings,
+    );
 
     const channel = AndroidNotificationChannel(
       channelId,

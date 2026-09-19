@@ -5486,8 +5486,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  const SettingsScreen({super.key});
-
   Future<void> logout(BuildContext context) async {
     try {
       await Supabase.instance.client.auth.signOut();

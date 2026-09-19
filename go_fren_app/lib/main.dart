@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
+import 'notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,9 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
   );
+
+  
+  await NotificationService.instance.initialize();
 
   runApp(const GoFrenApp());
 }
@@ -5341,7 +5345,147 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
   }
 }
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _notificationsEnabled = true;
+  bool _notificationLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationSetting();
+  }
+
+  Future<void> _loadNotificationSetting() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (mounted) {
+        setState(() {
+          _notificationLoading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('notification_settings')
+          .select('enabled')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      bool enabled = true;
+
+      if (response != null) {
+        enabled = response['enabled'] as bool? ?? true;
+      } else {
+        await Supabase.instance.client
+            .from('notification_settings')
+            .insert({
+          'user_id': user.id,
+          'enabled': true,
+        });
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _notificationsEnabled = enabled;
+        _notificationLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _notificationLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal memuat pengaturan notifikasi.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateNotificationSetting(bool value) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final previousValue = _notificationsEnabled;
+
+    setState(() {
+      _notificationsEnabled = value;
+    });
+
+    try {
+      if (value) {
+        final permissionGranted =
+            await NotificationService.instance.requestPermission();
+
+        if (!permissionGranted) {
+          if (!mounted) return;
+
+          setState(() {
+            _notificationsEnabled = false;
+          });
+
+          await Supabase.instance.client
+              .from('notification_settings')
+              .upsert({
+            'user_id': user.id,
+            'enabled': false,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Izin notifikasi belum diberikan.',
+              ),
+            ),
+          );
+
+          return;
+        }
+      }
+
+      await Supabase.instance.client
+          .from('notification_settings')
+          .upsert({
+        'user_id': user.id,
+        'enabled': value,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+
+      if (value) {
+        await NotificationService.instance.showTestNotification();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _notificationsEnabled = previousValue;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Gagal menyimpan pengaturan notifikasi.',
+          ),
+        ),
+      );
+    }
+  }
+
   const SettingsScreen({super.key});
 
   Future<void> logout(BuildContext context) async {
@@ -5488,10 +5632,25 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
             title: const Text('Notifications'),
-            trailing: Switch(
-              value: true,
-              onChanged: (_) {},
+            subtitle: Text(
+              _notificationLoading
+                  ? 'Loading...'
+                  : _notificationsEnabled
+                      ? 'Notifications are enabled'
+                      : 'Notifications are disabled',
             ),
+            trailing: _notificationLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Switch(
+                    value: _notificationsEnabled,
+                    onChanged: _updateNotificationSetting,
+                  ),
           ),
           ListTile(
             leading: const Icon(Icons.lock_outline),

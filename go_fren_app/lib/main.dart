@@ -3052,6 +3052,16 @@ class ProfileDetailScreen extends StatelessWidget {
   }
 }
 
+  @override
+  void dispose() {
+    if (_superLikesChannel != null) {
+      Supabase.instance.client.removeChannel(_superLikesChannel!);
+    }
+
+    super.dispose();
+  }
+}
+
 // ============================================================
 // MATCHES
 // ============================================================
@@ -3225,8 +3235,8 @@ class _MatchesScreenState extends State<MatchesScreen> {
 
   @override
   void dispose() {
-    if (_superLikesChannel != null) {
-      Supabase.instance.client.removeChannel(_superLikesChannel!);
+    if (_matchesChannel != null) {
+      Supabase.instance.client.removeChannel(_matchesChannel!);
     }
 
     super.dispose();

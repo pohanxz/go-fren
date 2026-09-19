@@ -2992,6 +2992,11 @@ class ProfileDetailScreen extends StatelessWidget {
               ),
             ),
           ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: Column(
+                children: [
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -3174,6 +3179,11 @@ class ProfileDetailScreen extends StatelessWidget {
                 label: const Text('REPORT'),
               ),
             ),
+
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

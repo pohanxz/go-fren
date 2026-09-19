@@ -1544,8 +1544,8 @@ class _MainNavigationState extends State<MainNavigation> {
             currentIndex = index;
           });
         },
-        destinations: const [
-          NavigationDestination(
+        destinations: [
+          const NavigationDestination(
             icon: Icon(Icons.explore_outlined),
             selectedIcon: Icon(Icons.explore),
             label: 'Discover',
@@ -1555,12 +1555,12 @@ class _MainNavigationState extends State<MainNavigation> {
             selectedIcon: _matchBadgeIcon(Icons.favorite),
             label: 'Matches',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
             selectedIcon: Icon(Icons.chat_bubble),
             label: 'Chats',
           ),
-          NavigationDestination(
+          const NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             selectedIcon: Icon(Icons.settings),
             label: 'Settings',
@@ -1568,14 +1568,14 @@ class _MainNavigationState extends State<MainNavigation> {
         ],
       ),
     );
+  }
+
   @override
   void dispose() {
     if (_matchesBadgeChannel != null) {
       Supabase.instance.client.removeChannel(_matchesBadgeChannel!);
     }
     super.dispose();
-  }
-
   }
 }
 

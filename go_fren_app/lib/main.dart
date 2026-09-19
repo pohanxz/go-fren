@@ -1600,7 +1600,6 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   final List<Profile> skippedProfiles = [];
   final Set<String> incomingSuperLikeIds = {};
-  RealtimeChannel? _superLikesChannel;
 
   String showMe = 'both';
   double minAge = 18;
@@ -1621,7 +1620,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       return;
     }
 
-    _superLikesChannel = Supabase.instance.client
+    Supabase.instance.client
         .channel('incoming-super-likes-${user.id}')
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,

@@ -1599,6 +1599,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   double swipeRotation = 0;
 
   final List<Profile> skippedProfiles = [];
+  final Set<String> incomingSuperLikeIds = {};
 
   String showMe = 'both';
   double minAge = 18;
@@ -1644,6 +1645,32 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
   }
 
+  Future<void> loadIncomingSuperLikes() async {
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('likes')
+          .select('user_id')
+          .eq('liked_user_id', user.id)
+          .eq('is_super_like', true);
+
+      incomingSuperLikeIds
+        ..clear()
+        ..addAll(
+          (response as List).map(
+            (item) => item['user_id'] as String,
+          ),
+        );
+    } catch (_) {
+      // Incoming Super Like indicator is optional.
+    }
+  }
+
   Future<void> loadProfiles() async {
     final user = Supabase.instance.client.auth.currentUser;
 
@@ -1656,6 +1683,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     try {
       final response = await Supabase.instance.client
           .rpc('get_discoverable_profiles');
+
+      await loadIncomingSuperLikes();
 
       final loadedProfiles = <Profile>[];
 
@@ -2454,13 +2483,30 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${profile.name}, ${profile.age}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 29,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        '${profile.name}, ${profile.age}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 29,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (incomingSuperLikeIds.contains(
+                                      profile.id,
+                                    )) ...[
+                                      const SizedBox(width: 8),
+                                      const Icon(
+                                        Icons.star_rounded,
+                                        color: Color(0xFFFFC107),
+                                        size: 28,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 const SizedBox(height: 5),
                                 Row(

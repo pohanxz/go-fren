@@ -37,6 +37,46 @@ jobs:
       - name: Check Flutter
         run: flutter --version
 
+      - name: Create Supabase config
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          cat > lib/supabase_config.dart <<EOF
+          class SupabaseConfig {
+            static const url = '$SUPABASE_URL';
+            static const publishableKey = '$SUPABASE_PUBLISHABLE_KEY';
+          }
+          EOF
+
+      - name: Verify Supabase config
+        run: |
+          test -s lib/supabase_config.dart
+          grep -q "class SupabaseConfig" lib/supabase_config.dart
+          grep -q "static const url" lib/supabase_config.dart
+          grep -q "static const publishableKey" lib/supabase_config.dart
+          echo "Supabase config created successfully."
+
+      - name: Create Supabase config
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          cat > lib/supabase_config.dart <<EOF
+          class SupabaseConfig {
+            static const url = '$SUPABASE_URL';
+            static const publishableKey = '$SUPABASE_PUBLISHABLE_KEY';
+          }
+          EOF
+
+      - name: Verify Supabase config
+        run: |
+          test -s lib/supabase_config.dart
+          grep -q "class SupabaseConfig" lib/supabase_config.dart
+          grep -q "static const url" lib/supabase_config.dart
+          grep -q "static const publishableKey" lib/supabase_config.dart
+          echo "Supabase config created successfully."
+
       - name: Get dependencies
         run: flutter pub get
 

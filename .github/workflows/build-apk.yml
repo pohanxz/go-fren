@@ -11,6 +11,10 @@ jobs:
     name: Build Debug APK
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: go_fren_app
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,6 +25,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
+          cache-dependency-path: go_fren_app/android/gradle/wrapper/gradle-wrapper.properties
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -48,6 +53,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: go-fren-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: go_fren_app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 7

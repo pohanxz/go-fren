@@ -399,23 +399,48 @@ class _GoFrenAppState extends State<GoFrenApp> {
 
 Future<bool> updateCurrentUserLocation() async {
   final user = Supabase.instance.client.auth.currentUser;
-  if (user == null) return false;
+
+  if (user == null) {
+    debugPrint('LOCATION ERROR: no authenticated user');
+    return false;
+  }
 
   try {
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled =
+        await Geolocator.isLocationServiceEnabled();
+
+    debugPrint(
+      'LOCATION SERVICE ENABLED: $serviceEnabled',
+    );
 
     if (!serviceEnabled) {
+      debugPrint('LOCATION ERROR: location service is disabled');
       return false;
     }
 
     var permission = await Geolocator.checkPermission();
 
+    debugPrint(
+      'LOCATION PERMISSION BEFORE REQUEST: $permission',
+    );
+
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
+
+      debugPrint(
+        'LOCATION PERMISSION AFTER REQUEST: $permission',
+      );
     }
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.denied) {
+      debugPrint('LOCATION ERROR: permission denied');
+      return false;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint(
+        'LOCATION ERROR: permission denied forever',
+      );
       return false;
     }
 
@@ -425,15 +450,40 @@ Future<bool> updateCurrentUserLocation() async {
       ),
     );
 
-    await Supabase.instance.client.from('user_locations').upsert({
-      'user_id': user.id,
-      'latitude': position.latitude,
-      'longitude': position.longitude,
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
-    });
+    debugPrint(
+      'LOCATION SUCCESS: '
+      '${position.latitude}, ${position.longitude}',
+    );
+
+    try {
+      await Supabase.instance.client
+          .from('user_locations')
+          .upsert({
+        'user_id': user.id,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'updated_at': DateTime.now()
+            .toUtc()
+            .toIso8601String(),
+      });
+
+      debugPrint(
+        'LOCATION DATABASE SUCCESS: user_locations upserted',
+      );
+    } catch (e) {
+      debugPrint(
+        'LOCATION DATABASE ERROR: $e',
+      );
+
+      return false;
+    }
 
     return true;
-  } catch (_) {
+  } catch (e) {
+    debugPrint(
+      'LOCATION GENERAL ERROR: $e',
+    );
+
     return false;
   }
 }

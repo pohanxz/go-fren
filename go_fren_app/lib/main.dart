@@ -397,10 +397,15 @@ class _GoFrenAppState extends State<GoFrenApp> {
   }
 }
 
+String lastLocationError = 'Unknown location error.';
+
 Future<bool> updateCurrentUserLocation() async {
   final user = Supabase.instance.client.auth.currentUser;
 
+  lastLocationError = 'Unknown location error.';
+
   if (user == null) {
+    lastLocationError = 'You are not signed in. Please sign in again.';
     debugPrint('LOCATION ERROR: no authenticated user');
     return false;
   }
@@ -414,6 +419,8 @@ Future<bool> updateCurrentUserLocation() async {
     );
 
     if (!serviceEnabled) {
+      lastLocationError =
+          'GPS/location service is turned off. Please turn on Location/GPS and try again.';
       debugPrint('LOCATION ERROR: location service is disabled');
       return false;
     }
@@ -433,53 +440,73 @@ Future<bool> updateCurrentUserLocation() async {
     }
 
     if (permission == LocationPermission.denied) {
+      lastLocationError =
+          'Location permission was denied. Please allow location permission for Go Fren.';
       debugPrint('LOCATION ERROR: permission denied');
       return false;
     }
 
     if (permission == LocationPermission.deniedForever) {
+      lastLocationError =
+          'Location permission is permanently denied. Please enable it in Android Settings > Apps > Go Fren > Permissions.';
       debugPrint(
         'LOCATION ERROR: permission denied forever',
       );
       return false;
     }
 
-    final position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-      ),
-    );
-
-    debugPrint(
-      'LOCATION SUCCESS: '
-      '${position.latitude}, ${position.longitude}',
-    );
+    Position position;
 
     try {
-      await Supabase.instance.client
-          .from('user_locations')
-          .upsert({
-        'user_id': user.id,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'updated_at': DateTime.now()
-            .toUtc()
-            .toIso8601String(),
-      });
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      ).timeout(
+        const Duration(seconds: 25),
+      );
 
       debugPrint(
-        'LOCATION DATABASE SUCCESS: user_locations upserted',
+        'LOCATION SUCCESS: '
+        '${position.latitude}, ${position.longitude}',
       );
     } catch (e) {
+      lastLocationError =
+          'GPS could not get your current location. Please make sure Location/GPS is on, then try again. Error: $e';
+
       debugPrint(
-        'LOCATION DATABASE ERROR: $e',
+        'LOCATION GPS ERROR: $e',
       );
 
       return false;
     }
 
+    try {
+      await Supabase.instance.client.from('user_locations').upsert({
+        'user_id': user.id,
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      debugPrint('LOCATION SUPABASE SUCCESS');
+    } catch (e) {
+      lastLocationError =
+          'Your GPS location was found, but it could not be saved. Please check your internet connection and try again. Error: $e';
+
+      debugPrint(
+        'LOCATION SUPABASE ERROR: $e',
+      );
+
+      return false;
+    }
+
+    lastLocationError = '';
     return true;
   } catch (e) {
+    lastLocationError =
+        'Could not update your location. Please try again. Error: $e';
+
     debugPrint(
       'LOCATION GENERAL ERROR: $e',
     );
@@ -2031,11 +2058,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Location is required for Discovery. Please enable location permission and GPS.',
+            lastLocationError.isEmpty
+                ? 'Could not update location. Please try again.'
+                : lastLocationError,
           ),
-          duration: Duration(seconds: 4),
+          duration: const Duration(seconds: 4),
         ),
       );
 
@@ -2370,11 +2399,13 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'Location is required for Discovery. Please enable location permission and GPS.',
+              lastLocationError.isEmpty
+                  ? 'Could not update location. Please try again.'
+                  : lastLocationError,
             ),
-            duration: Duration(seconds: 4),
+            duration: const Duration(seconds: 4),
           ),
         );
 

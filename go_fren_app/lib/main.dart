@@ -3220,22 +3220,23 @@ class ProfileDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        color: Color(0xFF6C5CE7),
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        profile.city,
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
-                          fontSize: 16,
+                  if (profile.city.isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.location_on_outlined,
+                          color: Color(0xFF6C5CE7),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 5),
+                        Text(
+                          profile.city,
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 25),
                   const Text(
                     'About',
@@ -3650,9 +3651,12 @@ class _MatchesScreenState extends State<MatchesScreen> {
       }
 
       final profileResponse = await Supabase.instance.client
-          .from('profiles')
-          .select('id, name, bio, birth_date, city, avatar_url')
-          .inFilter('id', matchIds);
+          .rpc(
+            'get_profiles_for_viewer',
+            params: {
+              'p_user_ids': matchIds,
+            },
+          );
 
       final loadedMatches = <Profile>[];
 
@@ -3731,11 +3735,17 @@ class _MatchesScreenState extends State<MatchesScreen> {
         userId == user.id ? matchedUserId : userId;
 
     try {
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select('id, name, bio, birth_date, city, avatar_url')
-          .eq('id', otherUserId)
-          .maybeSingle();
+      final profileResponse = await Supabase.instance.client
+          .rpc(
+            'get_profiles_for_viewer',
+            params: {
+              'p_user_ids': [otherUserId],
+            },
+          );
+
+      final response = (profileResponse as List).isNotEmpty
+          ? profileResponse.first
+          : null;
 
       if (response == null || !mounted) return;
 
@@ -3945,7 +3955,9 @@ class _MatchesScreenState extends State<MatchesScreen> {
           '${profile.name}, ${profile.age}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(profile.city),
+        subtitle: profile.city.isNotEmpty
+            ? Text(profile.city)
+            : null,
         trailing: IconButton(
           icon: const Icon(
             Icons.chat_bubble,

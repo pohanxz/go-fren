@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase_config.dart';
+import 'moderation_reports_screen.dart';
 import 'notification_service.dart';
 
 Future<void> main() async {
@@ -6022,6 +6023,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: _updateNotificationSetting,
                   ),
           ),
+          
+                FutureBuilder<bool>(
+                  future: Supabase.instance.client
+                      .rpc('is_moderator')
+                      .then((value) => value == true)
+                      .catchError((_) => false),
+                  builder: (context, snapshot) {
+                    if (snapshot.data != true) {
+                      return const SizedBox.shrink();
+                    }
+
+                    return ListTile(
+                      leading: const Icon(
+                        Icons.admin_panel_settings_outlined,
+                      ),
+                      title: const Text(
+                        'Moderation Reports',
+                      ),
+                      subtitle: const Text(
+                        'Review and manage user reports.',
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const ModerationReportsScreen(),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text('Privacy'),

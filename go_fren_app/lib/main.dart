@@ -5467,6 +5467,7 @@ class BlockedUsersScreen extends StatefulWidget {
 
 class BlockedUsersScreenState extends State<BlockedUsersScreen> {
   List<Map<String, dynamic>> blockedUsers = [];
+  final Set<String> _unblockingIds = <String>{};
   bool isLoading = true;
 
   @override
@@ -5478,7 +5479,15 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
   Future<void> loadBlockedUsers() async {
     final user = Supabase.instance.client.auth.currentUser;
 
-    if (user == null) return;
+    if (user == null) {
+      if (!mounted) return;
+
+      setState(() {
+        blockedUsers = [];
+        isLoading = false;
+      });
+      return;
+    }
 
     try {
       final blockResponse = await Supabase.instance.client
@@ -5540,9 +5549,37 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
   }
 
   Future<void> unblockUser(String blockedId) async {
-    final user = Supabase.instance.client.auth.currentUser;
+    if (_unblockingIds.contains(blockedId)) return;
 
+    final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unblock this user?'),
+        content: const Text(
+          'This user will be removed from your blocked list. '
+          'They may appear in Discovery again, depending on your settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('CANCEL'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('UNBLOCK'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _unblockingIds.add(blockedId);
+    });
 
     try {
       await Supabase.instance.client
@@ -5576,6 +5613,12 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
           content: Text('Failed to unblock user.'),
         ),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _unblockingIds.remove(blockedId);
+        });
+      }
     }
   }
 
@@ -5624,8 +5667,18 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
                       ),
                       subtitle: city.isEmpty ? null : Text(city),
                       trailing: OutlinedButton(
-                        onPressed: () => unblockUser(user['id'] as String),
-                        child: const Text('UNBLOCK'),
+                        onPressed: _unblockingIds.contains(user['id'])
+                            ? null
+                            : () => unblockUser(user['id'] as String),
+                        child: _unblockingIds.contains(user['id'])
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('UNBLOCK'),
                       ),
                     );
                   },

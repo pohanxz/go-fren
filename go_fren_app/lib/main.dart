@@ -2,22 +2,35 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'supabase_config.dart';
 import 'moderation_reports_screen.dart';
 import 'notification_service.dart';
+import 'firebase_options.dart';
+import 'fcm_service.dart';
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
   );
 
-  
   await NotificationService.instance.initialize();
 
   runApp(const GoFrenApp());
@@ -46,16 +59,15 @@ class _GoFrenAppState extends State<GoFrenApp> {
   void initState() {
     super.initState();
 
-    authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       if (data.event == AuthChangeEvent.passwordRecovery) {
         isPasswordRecovery = true;
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           navigatorKey.currentState?.pushAndRemoveUntil(
-            MaterialPageRoute(
-              builder: (_) => const UpdatePasswordScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const UpdatePasswordScreen()),
             (route) => false,
           );
         });
@@ -70,19 +82,20 @@ class _GoFrenAppState extends State<GoFrenApp> {
         if (user != null) {
           _subscribeToGlobalMatchNotifications(user.id);
           _subscribeToGlobalMessageNotifications(user.id);
+          FcmService.instance.initialize();
         }
       }
 
       if (data.event == AuthChangeEvent.signedOut) {
         _unsubscribeFromGlobalMatchNotifications();
         _unsubscribeFromGlobalMessageNotifications();
+        FcmService.instance.dispose();
       }
     });
   }
 
   void _subscribeToGlobalMatchNotifications(String userId) {
-    if (_globalMatchesUserId == userId &&
-        _globalMatchesChannel != null) {
+    if (_globalMatchesUserId == userId && _globalMatchesChannel != null) {
       return;
     }
 
@@ -102,10 +115,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
             value: userId,
           ),
           callback: (payload) async {
-            await _handleGlobalMatchNotification(
-              payload,
-              userId,
-            );
+            await _handleGlobalMatchNotification(payload, userId);
           },
         )
         .onPostgresChanges(
@@ -118,10 +128,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
             value: userId,
           ),
           callback: (payload) async {
-            await _handleGlobalMatchNotification(
-              payload,
-              userId,
-            );
+            await _handleGlobalMatchNotification(payload, userId);
           },
         )
         .subscribe();
@@ -140,8 +147,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
   }
 
   void _subscribeToGlobalMessageNotifications(String userId) {
-    if (_globalMessagesUserId == userId &&
-        _globalMessagesChannel != null) {
+    if (_globalMessagesUserId == userId && _globalMessagesChannel != null) {
       return;
     }
 
@@ -156,10 +162,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
           schema: 'public',
           table: 'messages',
           callback: (payload) async {
-            await _handleGlobalMessageNotification(
-              payload,
-              userId,
-            );
+            await _handleGlobalMessageNotification(payload, userId);
           },
         )
         .subscribe();
@@ -218,8 +221,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
           .eq('user_id', userId)
           .maybeSingle();
 
-      final notificationsEnabled =
-          settingResponse?['enabled'] as bool? ?? true;
+      final notificationsEnabled = settingResponse?['enabled'] as bool? ?? true;
 
       if (!notificationsEnabled) {
         return;
@@ -235,17 +237,14 @@ class _GoFrenAppState extends State<GoFrenApp> {
         return;
       }
 
-      final matchUserId =
-          matchResponse['user_id']?.toString();
-      final matchedUserId =
-          matchResponse['matched_user_id']?.toString();
+      final matchUserId = matchResponse['user_id']?.toString();
+      final matchedUserId = matchResponse['matched_user_id']?.toString();
 
       if (matchUserId == null || matchedUserId == null) {
         return;
       }
 
-      final isUserInMatch =
-          matchUserId == userId || matchedUserId == userId;
+      final isUserInMatch = matchUserId == userId || matchedUserId == userId;
 
       if (!isUserInMatch) {
         return;
@@ -268,8 +267,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
         return;
       }
 
-      final name =
-          profileResponse['name'] as String? ?? 'Someone';
+      final name = profileResponse['name'] as String? ?? 'Someone';
 
       await NotificationService.instance.showMessageNotification(
         name: name,
@@ -299,8 +297,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
       return;
     }
 
-    final otherUserId =
-        matchUserId == userId ? matchedUserId : matchUserId;
+    final otherUserId = matchUserId == userId ? matchedUserId : matchUserId;
 
     final pair = [userId, otherUserId]..sort();
 
@@ -319,8 +316,7 @@ class _GoFrenAppState extends State<GoFrenApp> {
           .eq('user_id', userId)
           .maybeSingle();
 
-      final notificationsEnabled =
-          settingResponse?['enabled'] as bool? ?? true;
+      final notificationsEnabled = settingResponse?['enabled'] as bool? ?? true;
 
       if (!notificationsEnabled) {
         return;
@@ -336,12 +332,9 @@ class _GoFrenAppState extends State<GoFrenApp> {
         return;
       }
 
-      final name =
-          profileResponse['name'] as String? ?? 'Someone';
+      final name = profileResponse['name'] as String? ?? 'Someone';
 
-      await NotificationService.instance.showMatchNotification(
-        name: name,
-      );
+      await NotificationService.instance.showMatchNotification(name: name);
     } catch (_) {
       // Notification errors must not interrupt the main app flow.
     }
@@ -377,16 +370,11 @@ class _GoFrenAppState extends State<GoFrenApp> {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(
-              color: Colors.grey.shade200,
-            ),
+            borderSide: BorderSide(color: Colors.grey.shade200),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(
-              color: Color(0xFF6C5CE7),
-              width: 2,
-            ),
+            borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
           ),
         ),
       ),
@@ -411,47 +399,35 @@ Future<bool> updateCurrentUserLocation() async {
   }
 
   try {
-    final serviceEnabled =
-        await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
-    debugPrint(
-      'LOCATION SERVICE ENABLED: $serviceEnabled',
-    );
+    debugPrint('LOCATION SERVICE ENABLED: $serviceEnabled');
 
     if (!serviceEnabled) {
-      lastLocationError =
-          'GPS/location service is turned off. Please turn on Location/GPS and try again.';
+      lastLocationError = 'GPS/location service is turned off. Please turn on Location/GPS and try again.';
       debugPrint('LOCATION ERROR: location service is disabled');
       return false;
     }
 
     var permission = await Geolocator.checkPermission();
 
-    debugPrint(
-      'LOCATION PERMISSION BEFORE REQUEST: $permission',
-    );
+    debugPrint('LOCATION PERMISSION BEFORE REQUEST: $permission');
 
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
 
-      debugPrint(
-        'LOCATION PERMISSION AFTER REQUEST: $permission',
-      );
+      debugPrint('LOCATION PERMISSION AFTER REQUEST: $permission');
     }
 
     if (permission == LocationPermission.denied) {
-      lastLocationError =
-          'Location permission was denied. Please allow location permission for Go Fren.';
+      lastLocationError = 'Location permission was denied. Please allow location permission for Go Fren.';
       debugPrint('LOCATION ERROR: permission denied');
       return false;
     }
 
     if (permission == LocationPermission.deniedForever) {
-      lastLocationError =
-          'Location permission is permanently denied. Please enable it in Android Settings > Apps > Go Fren > Permissions.';
-      debugPrint(
-        'LOCATION ERROR: permission denied forever',
-      );
+      lastLocationError = 'Location permission is permanently denied. Please enable it in Android Settings > Apps > Go Fren > Permissions.';
+      debugPrint('LOCATION ERROR: permission denied forever');
       return false;
     }
 
@@ -462,9 +438,7 @@ Future<bool> updateCurrentUserLocation() async {
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
         ),
-      ).timeout(
-        const Duration(seconds: 25),
-      );
+      ).timeout(const Duration(seconds: 25));
 
       debugPrint(
         'LOCATION SUCCESS: '
@@ -474,9 +448,7 @@ Future<bool> updateCurrentUserLocation() async {
       lastLocationError =
           'GPS could not get your current location. Please make sure Location/GPS is on, then try again. Error: $e';
 
-      debugPrint(
-        'LOCATION GPS ERROR: $e',
-      );
+      debugPrint('LOCATION GPS ERROR: $e');
 
       return false;
     }
@@ -494,9 +466,7 @@ Future<bool> updateCurrentUserLocation() async {
       lastLocationError =
           'Your GPS location was found, but it could not be saved. Please check your internet connection and try again. Error: $e';
 
-      debugPrint(
-        'LOCATION SUPABASE ERROR: $e',
-      );
+      debugPrint('LOCATION SUPABASE ERROR: $e');
 
       return false;
     }
@@ -507,9 +477,7 @@ Future<bool> updateCurrentUserLocation() async {
     lastLocationError =
         'Could not update your location. Please try again. Error: $e';
 
-    debugPrint(
-      'LOCATION GENERAL ERROR: $e',
-    );
+    debugPrint('LOCATION GENERAL ERROR: $e');
 
     return false;
   }
@@ -555,11 +523,9 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     }
 
     if (password != confirmPassword) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Passwords do not match.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match.')));
       return;
     }
 
@@ -577,16 +543,12 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Password updated successfully.'),
-        ),
+        const SnackBar(content: Text('Password updated successfully.')),
       );
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on AuthException catch (e) {
@@ -596,9 +558,8 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
         isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -617,9 +578,7 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Set New Password'),
-      ),
+      appBar: AppBar(title: const Text('Set New Password')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -637,18 +596,12 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
               const SizedBox(height: 30),
               const Text(
                 'Set a new password',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
                 'Create a new password for your Go Fren account.',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 15,
-                ),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 15),
               ),
               const SizedBox(height: 30),
               TextField(
@@ -748,8 +701,6 @@ class Profile {
   });
 }
 
-
-
 // ============================================================
 // SPLASH
 // ============================================================
@@ -769,16 +720,15 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       if (data.event == AuthChangeEvent.passwordRecovery && mounted) {
         isPasswordRecovery = true;
 
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (_) => const UpdatePasswordScreen(),
-          ),
+          MaterialPageRoute(builder: (_) => const UpdatePasswordScreen()),
         );
       }
     });
@@ -791,9 +741,7 @@ class _SplashScreenState extends State<SplashScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => AgeGateScreen(
-            isLoggedIn: session != null,
-          ),
+          builder: (_) => AgeGateScreen(isLoggedIn: session != null),
         ),
       );
     });
@@ -811,10 +759,7 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFF6C5CE7),
-              Color(0xFF8E7CFF),
-            ],
+            colors: [Color(0xFF6C5CE7), Color(0xFF8E7CFF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -848,10 +793,7 @@ class _SplashScreenState extends State<SplashScreen> {
               const SizedBox(height: 8),
               const Text(
                 'Meet. Match. Connect.',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.white70, fontSize: 16),
               ),
             ],
           ),
@@ -864,10 +806,7 @@ class _SplashScreenState extends State<SplashScreen> {
 class AgeGateScreen extends StatelessWidget {
   final bool isLoggedIn;
 
-  const AgeGateScreen({
-    super.key,
-    required this.isLoggedIn,
-  });
+  const AgeGateScreen({super.key, required this.isLoggedIn});
 
   void continueToApp(BuildContext context) {
     Navigator.pushReplacement(
@@ -905,10 +844,7 @@ class AgeGateScreen extends StatelessWidget {
               const Text(
                 'Go Fren is 18+',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 14),
               Text(
@@ -945,9 +881,7 @@ class AgeGateScreen extends StatelessWidget {
                   ),
                   child: const Text(
                     'I AM 18 OR OLDER',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -959,9 +893,7 @@ class AgeGateScreen extends StatelessWidget {
                   onPressed: () {},
                   child: const Text(
                     'EXIT',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -1006,23 +938,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => const MainNavigation(),
-        ),
+        MaterialPageRoute(builder: (_) => const MainNavigation()),
       );
     } on AuthException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Login failed. Please try again.'),
-        ),
+        const SnackBar(content: Text('Login failed. Please try again.')),
       );
     }
   }
@@ -1032,9 +959,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email first.'),
-        ),
+        const SnackBar(content: Text('Please enter your email first.')),
       );
       return;
     }
@@ -1055,16 +980,13 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send password reset email.'),
-        ),
+        const SnackBar(content: Text('Failed to send password reset email.')),
       );
     }
   }
@@ -1087,18 +1009,12 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 25),
               const Text(
                 'Welcome back!',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
                 'Sign in to continue to Go Fren.',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
               ),
               const SizedBox(height: 35),
               TextField(
@@ -1141,10 +1057,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: const Text(
                     'LOG IN',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),
               ),
@@ -1170,10 +1083,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Center(
                 child: Text(
                   'Go Fren is for users 18+ only.',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                 ),
               ),
             ],
@@ -1241,9 +1151,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     if (birthDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select your date of birth.'),
-        ),
+        const SnackBar(content: Text('Please select your date of birth.')),
       );
       return;
     }
@@ -1252,16 +1160,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     var age = today.year - birthDate!.year;
 
     if (today.month < birthDate!.month ||
-        (today.month == birthDate!.month &&
-            today.day < birthDate!.day)) {
+        (today.month == birthDate!.month && today.day < birthDate!.day)) {
       age--;
     }
 
     if (age < 18) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You must be 18 years old or older.'),
-        ),
+        const SnackBar(content: Text('You must be 18 years old or older.')),
       );
       return;
     }
@@ -1303,9 +1208,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
@@ -1316,9 +1220,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration failed. Please try again.'),
-        ),
+        const SnackBar(content: Text('Registration failed. Please try again.')),
       );
     }
   }
@@ -1326,9 +1228,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Create Account'),
-      ),
+      appBar: AppBar(title: const Text('Create Account')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -1337,10 +1237,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               const Text(
                 'Join Go Fren',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1393,18 +1290,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   prefixIcon: Icon(Icons.wc_outlined),
                 ),
                 items: const [
-                  DropdownMenuItem(
-                    value: 'Male',
-                    child: Text('Male'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Female',
-                    child: Text('Female'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'Other',
-                    child: Text('Other'),
-                  ),
+                  DropdownMenuItem(value: 'Male', child: Text('Male')),
+                  DropdownMenuItem(value: 'Female', child: Text('Female')),
+                  DropdownMenuItem(value: 'Other', child: Text('Other')),
                 ],
                 onChanged: (value) {
                   setState(() {
@@ -1424,9 +1312,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 value: is18Plus,
-                title: const Text(
-                  'I confirm that I am 18 years old or older.',
-                ),
+                title: const Text('I confirm that I am 18 years old or older.'),
                 onChanged: (value) {
                   setState(() {
                     is18Plus = value ?? false;
@@ -1525,10 +1411,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   Future<void> pickImage(ImageSource source) async {
     final picker = ImagePicker();
 
-    final image = await picker.pickImage(
-      source: source,
-      imageQuality: 80,
-    );
+    final image = await picker.pickImage(source: source, imageQuality: 80);
 
     if (image == null || !mounted) return;
 
@@ -1636,9 +1519,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       if (!mounted) return;
 
@@ -1646,20 +1528,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         isSaving = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save profile: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save profile: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile Setup'),
-      ),
+      appBar: AppBar(title: const Text('Profile Setup')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -1668,10 +1545,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             children: [
               const Text(
                 'Complete Your Profile',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1756,18 +1630,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               const SizedBox(height: 10),
               const Text(
                 'Your interests',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: interests.map((interest) {
-                  final selected =
-                      selectedInterests.contains(interest);
+                  final selected = selectedInterests.contains(interest);
 
                   return FilterChip(
                     label: Text(interest),
@@ -1902,9 +1772,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget _matchBadgeIcon(IconData icon) {
     return Badge(
       isLabelVisible: matchCount > 0,
-      label: Text(
-        matchCount > 99 ? '99+' : '$matchCount',
-      ),
+      label: Text(matchCount > 99 ? '99+' : '$matchCount'),
       child: Icon(icon),
     );
   }
@@ -2093,8 +1961,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
         showMe = response['show_me'] as String? ?? 'both';
         minAge = (response['min_age'] as num?)?.toDouble() ?? 18;
         maxAge = (response['max_age'] as num?)?.toDouble() ?? 100;
-        maxDistanceKm =
-            (response['max_distance_km'] as num?)?.toDouble() ?? 50;
+        maxDistanceKm = (response['max_distance_km'] as num?)?.toDouble() ?? 50;
       });
     } catch (_) {
       // Use defaults if preferences cannot be loaded.
@@ -2117,11 +1984,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
       incomingSuperLikeIds
         ..clear()
-        ..addAll(
-          (response as List).map(
-            (item) => item['user_id'] as String,
-          ),
-        );
+        ..addAll((response as List).map((item) => item['user_id'] as String));
     } catch (_) {
       // Incoming Super Like indicator is optional.
     }
@@ -2137,8 +2000,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     }
 
     try {
-      final response = await Supabase.instance.client
-          .rpc('get_discoverable_profiles');
+      final response = await Supabase.instance.client.rpc(
+        'get_discoverable_profiles',
+      );
 
       await loadIncomingSuperLikes();
 
@@ -2206,11 +2070,9 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
       setState(() => isLoading = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load profiles.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to load profiles.')));
     }
   }
 
@@ -2283,25 +2145,18 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
       if (e.code == '23505') {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You already liked this profile.'),
-          ),
+          const SnackBar(content: Text('You already liked this profile.')),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to super like: ${e.message}'),
-          ),
+          SnackBar(content: Text('Failed to super like: ${e.message}')),
         );
       }
     } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to super like.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed to super like.')));
     }
   }
 
@@ -2340,35 +2195,27 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
       if (e.code == '23505') {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You already liked this profile.'),
-          ),
+          const SnackBar(content: Text('You already liked this profile.')),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send like. Please try again.'),
-        ),
+        const SnackBar(content: Text('Failed to send like. Please try again.')),
       );
     }
   }
-
 
   Future<void> saveDiscoveryPreferences() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
     try {
-      await Supabase.instance.client
-          .from('discovery_preferences')
-          .upsert({
+      await Supabase.instance.client.from('discovery_preferences').upsert({
         'user_id': user.id,
         'show_me': showMe,
         'min_age': minAge.round(),
@@ -2421,9 +2268,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to refresh discovery.'),
-        ),
+        const SnackBar(content: Text('Failed to refresh discovery.')),
       );
     }
   }
@@ -2515,10 +2360,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         min: 18,
                         max: 100,
                         divisions: 82,
-                        values: RangeValues(
-                          selectedMinAge,
-                          selectedMaxAge,
-                        ),
+                        values: RangeValues(selectedMinAge, selectedMaxAge),
                         labels: RangeLabels(
                           selectedMinAge.round().toString(),
                           selectedMaxAge.round().toString(),
@@ -2555,10 +2397,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                         width: double.infinity,
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: () => Navigator.pop(
-                            sheetContext,
-                            true,
-                          ),
+                          onPressed: () => Navigator.pop(sheetContext, true),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C5CE7),
                             foregroundColor: Colors.white,
@@ -2568,9 +2407,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           ),
                           child: const Text(
                             'APPLY FILTERS',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -2584,16 +2421,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                             selectedMinAge = 18;
                             selectedMaxAge = 100;
                             selectedDistance = 50;
-                            Navigator.pop(
-                              sheetContext,
-                              true,
-                            );
+                            Navigator.pop(sheetContext, true);
                           },
                           child: const Text(
                             'RESET FILTERS',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -2629,9 +2461,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save discovery filters.'),
-        ),
+        const SnackBar(content: Text('Failed to save discovery filters.')),
       );
     }
   }
@@ -2639,9 +2469,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (profiles.isEmpty) {
@@ -2660,10 +2488,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   const SizedBox(width: 10),
                   const Text(
                     'Go Fren',
-                    style: TextStyle(
-                      fontSize: 25,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
                   ),
                   const Spacer(),
                   IconButton(
@@ -2691,7 +2516,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '${showMe == 'both' ? 'Everyone' : showMe == 'male' ? 'Male' : 'Female'} · '
+                      '${showMe == 'both'
+                          ? 'Everyone'
+                          : showMe == 'male'
+                          ? 'Male'
+                          : 'Female'} · '
                       '${minAge.round()}–${maxAge.round()} · '
                       '≤ ${maxDistanceKm.round()} km',
                       style: const TextStyle(
@@ -2779,10 +2608,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 const SizedBox(width: 10),
                 const Text(
                   'Go Fren',
-                  style: TextStyle(
-                    fontSize: 25,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
@@ -2810,7 +2636,11 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    '${showMe == 'both' ? 'Everyone' : showMe == 'male' ? 'Male' : 'Female'} · '
+                    '${showMe == 'both'
+                        ? 'Everyone'
+                        : showMe == 'male'
+                        ? 'Male'
+                        : 'Female'} · '
                     '${minAge.round()}–${maxAge.round()} · '
                     '≤ ${maxDistanceKm.round()} km',
                     style: const TextStyle(
@@ -2878,9 +2708,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ProfileDetailScreen(
-                        profile: profile,
-                      ),
+                      builder: (_) => ProfileDetailScreen(profile: profile),
                     ),
                   );
                 },
@@ -2897,34 +2725,28 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                       swipeRotation = 0.15;
                     });
 
-                    Future.delayed(
-                      const Duration(milliseconds: 180),
-                      () {
-                        if (!mounted) return;
-                        like();
-                        setState(() {
-                          swipeOffset = 0;
-                          swipeRotation = 0;
-                        });
-                      },
-                    );
+                    Future.delayed(const Duration(milliseconds: 180), () {
+                      if (!mounted) return;
+                      like();
+                      setState(() {
+                        swipeOffset = 0;
+                        swipeRotation = 0;
+                      });
+                    });
                   } else if (swipeOffset < -120) {
                     setState(() {
                       swipeOffset = -500;
                       swipeRotation = -0.15;
                     });
 
-                    Future.delayed(
-                      const Duration(milliseconds: 180),
-                      () {
-                        if (!mounted) return;
-                        skip();
-                        setState(() {
-                          swipeOffset = 0;
-                          swipeRotation = 0;
-                        });
-                      },
-                    );
+                    Future.delayed(const Duration(milliseconds: 180), () {
+                      if (!mounted) return;
+                      skip();
+                      setState(() {
+                        swipeOffset = 0;
+                        swipeRotation = 0;
+                      });
+                    });
                   } else {
                     setState(() {
                       swipeOffset = 0;
@@ -3016,9 +2838,8 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ProfileDetailScreen(
-                                    profile: profile,
-                                  ),
+                                  builder: (_) =>
+                                      ProfileDetailScreen(profile: profile),
                                 ),
                               );
                             },
@@ -3071,10 +2892,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                           Container(
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black87,
-                                ],
+                                colors: [Colors.transparent, Colors.black87],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 stops: [0.48, 1],
@@ -3173,8 +2991,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                               fontSize: 11,
                                             ),
                                           ),
-                                          visualDensity:
-                                              VisualDensity.compact,
+                                          visualDensity: VisualDensity.compact,
                                         ),
                                       )
                                       .toList(),
@@ -3228,6 +3045,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
       ),
     );
   }
+
   Widget _actionButton({
     required IconData icon,
     required Color color,
@@ -3255,11 +3073,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
               width: 1.5,
             ),
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: size * .48,
-          ),
+          child: Icon(icon, color: color, size: size * .48),
         ),
       ),
     );
@@ -3273,10 +3087,7 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 class ProfileDetailScreen extends StatelessWidget {
   final Profile profile;
 
-  const ProfileDetailScreen({
-    super.key,
-    required this.profile,
-  });
+  const ProfileDetailScreen({super.key, required this.profile});
 
   @override
   Widget build(BuildContext context) {
@@ -3334,10 +3145,7 @@ class ProfileDetailScreen extends StatelessWidget {
                   const SizedBox(height: 25),
                   const Text(
                     'About',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -3351,10 +3159,7 @@ class ProfileDetailScreen extends StatelessWidget {
                   const SizedBox(height: 25),
                   const Text(
                     'Interests',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -3369,8 +3174,7 @@ class ProfileDetailScreen extends StatelessWidget {
                     height: 55,
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        final user =
-                            Supabase.instance.client.auth.currentUser;
+                        final user = Supabase.instance.client.auth.currentUser;
 
                         if (user == null || profile.id == null) return;
 
@@ -3402,9 +3206,9 @@ class ProfileDetailScreen extends StatelessWidget {
                               ),
                             );
                           } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.message)),
-                            );
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(e.message)));
                           }
                         } catch (_) {
                           if (!context.mounted) return;
@@ -3433,189 +3237,189 @@ class ProfileDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
               child: Column(
                 children: [
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final user = Supabase.instance.client.auth.currentUser;
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final user = Supabase.instance.client.auth.currentUser;
 
-                  if (user == null || profile.id == null) return;
+                        if (user == null || profile.id == null) return;
 
-                  try {
-                    await Supabase.instance.client.from('blocks').insert({
-                      'blocker_id': user.id,
-                      'blocked_id': profile.id,
-                    });
+                        try {
+                          await Supabase.instance.client.from('blocks').insert({
+                            'blocker_id': user.id,
+                            'blocked_id': profile.id,
+                          });
 
-                    if (!context.mounted) return;
+                          if (!context.mounted) return;
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Profile blocked.'),
-                      ),
-                    );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Profile blocked.')),
+                          );
 
-                    Navigator.pop(context);
-                  } on PostgrestException catch (e) {
-                    if (!context.mounted) return;
+                          Navigator.pop(context);
+                        } on PostgrestException catch (e) {
+                          if (!context.mounted) return;
 
-                    if (e.code == '23505') {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('This profile is already blocked.'),
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.message)),
-                      );
-                    }
-                  } catch (_) {
-                    if (!context.mounted) return;
+                          if (e.code == '23505') {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'This profile is already blocked.',
+                                ),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text(e.message)));
+                          }
+                        } catch (_) {
+                          if (!context.mounted) return;
 
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to block profile.'),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.block),
-                label: const Text('BLOCK'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  final user = Supabase.instance.client.auth.currentUser;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to block profile.'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.block),
+                      label: const Text('BLOCK'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final user = Supabase.instance.client.auth.currentUser;
 
-                  if (user == null || profile.id == null) return;
+                        if (user == null || profile.id == null) return;
 
-                  final reasonController = TextEditingController();
-                  String selectedReason = 'Inappropriate behavior';
+                        final reasonController = TextEditingController();
+                        String selectedReason = 'Inappropriate behavior';
 
-                  final shouldReport = await showDialog<bool>(
-                    context: context,
-                    builder: (dialogContext) {
-                      return StatefulBuilder(
-                        builder: (context, setDialogState) {
-                          return AlertDialog(
-                            title: const Text('Report Profile'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                DropdownButtonFormField<String>(
-                                  initialValue: selectedReason,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Reason',
+                        final shouldReport = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) {
+                            return StatefulBuilder(
+                              builder: (context, setDialogState) {
+                                return AlertDialog(
+                                  title: const Text('Report Profile'),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      DropdownButtonFormField<String>(
+                                        initialValue: selectedReason,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Reason',
+                                        ),
+                                        items: const [
+                                          DropdownMenuItem(
+                                            value: 'Inappropriate behavior',
+                                            child: Text(
+                                              'Inappropriate behavior',
+                                            ),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Fake profile',
+                                            child: Text('Fake profile'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Harassment',
+                                            child: Text('Harassment'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Spam',
+                                            child: Text('Spam'),
+                                          ),
+                                          DropdownMenuItem(
+                                            value: 'Other',
+                                            child: Text('Other'),
+                                          ),
+                                        ],
+                                        onChanged: (value) {
+                                          if (value != null) {
+                                            setDialogState(() {
+                                              selectedReason = value;
+                                            });
+                                          }
+                                        },
+                                      ),
+                                      const SizedBox(height: 12),
+                                      TextField(
+                                        controller: reasonController,
+                                        maxLines: 3,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Details (optional)',
+                                          border: OutlineInputBorder(),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  items: const [
-                                    DropdownMenuItem(
-                                      value: 'Inappropriate behavior',
-                                      child: Text('Inappropriate behavior'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext, false);
+                                      },
+                                      child: const Text('CANCEL'),
                                     ),
-                                    DropdownMenuItem(
-                                      value: 'Fake profile',
-                                      child: Text('Fake profile'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'Harassment',
-                                      child: Text('Harassment'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'Spam',
-                                      child: Text('Spam'),
-                                    ),
-                                    DropdownMenuItem(
-                                      value: 'Other',
-                                      child: Text('Other'),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        Navigator.pop(dialogContext, true);
+                                      },
+                                      child: const Text('REPORT'),
                                     ),
                                   ],
-                                  onChanged: (value) {
-                                    if (value != null) {
-                                      setDialogState(() {
-                                        selectedReason = value;
-                                      });
-                                    }
-                                  },
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: reasonController,
-                                  maxLines: 3,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Details (optional)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(dialogContext, false);
-                                },
-                                child: const Text('CANCEL'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.pop(dialogContext, true);
-                                },
-                                child: const Text('REPORT'),
-                              ),
-                            ],
+                                );
+                              },
+                            );
+                          },
+                        );
+
+                        final details = reasonController.text.trim();
+                        reasonController.dispose();
+
+                        if (shouldReport != true) return;
+
+                        try {
+                          await Supabase.instance.client.from('reports').insert(
+                            {
+                              'reporter_id': user.id,
+                              'reported_user_id': profile.id,
+                              'reason': selectedReason,
+                              'details': details,
+                            },
                           );
-                        },
-                      );
-                    },
-                  );
 
-                  final details = reasonController.text.trim();
-                  reasonController.dispose();
+                          if (!context.mounted) return;
 
-                  if (shouldReport != true) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Report submitted.')),
+                          );
+                        } on PostgrestException catch (e) {
+                          if (!context.mounted) return;
 
-                  try {
-                    await Supabase.instance.client.from('reports').insert({
-                      'reporter_id': user.id,
-                      'reported_user_id': profile.id,
-                      'reason': selectedReason,
-                      'details': details,
-                    });
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(e.message)));
+                        } catch (_) {
+                          if (!context.mounted) return;
 
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Report submitted.'),
-                      ),
-                    );
-                  } on PostgrestException catch (e) {
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.message)),
-                    );
-                  } catch (_) {
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to submit report.'),
-                      ),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.flag_outlined),
-                label: const Text('REPORT'),
-              ),
-            ),
-
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Failed to submit report.'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.flag_outlined),
+                      label: const Text('REPORT'),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -3623,9 +3427,7 @@ class ProfileDetailScreen extends StatelessWidget {
         ],
       ),
     );
-
   }
-
 }
 
 // ============================================================
@@ -3712,26 +3514,25 @@ class _MatchesScreenState extends State<MatchesScreen> {
 
         matchIds.add(matchUserId);
       }
-        final blockedResponse = await Supabase.instance.client
-            .from('blocks')
-            .select('blocker_id, blocked_id')
-            .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
+      final blockedResponse = await Supabase.instance.client
+          .from('blocks')
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.${user.id},blocked_id.eq.${user.id}');
 
-        final blockedIds = <String>{};
+      final blockedIds = <String>{};
 
-        for (final item in blockedResponse as List) {
-          final blockerId = item['blocker_id'] as String;
-          final blockedId = item['blocked_id'] as String;
+      for (final item in blockedResponse as List) {
+        final blockerId = item['blocker_id'] as String;
+        final blockedId = item['blocked_id'] as String;
 
-          if (blockerId == user.id) {
-            blockedIds.add(blockedId);
-          } else if (blockedId == user.id) {
-            blockedIds.add(blockerId);
-          }
+        if (blockerId == user.id) {
+          blockedIds.add(blockedId);
+        } else if (blockedId == user.id) {
+          blockedIds.add(blockerId);
         }
+      }
 
-        matchIds.removeWhere((id) => blockedIds.contains(id));
-
+      matchIds.removeWhere((id) => blockedIds.contains(id));
 
       if (matchIds.isEmpty) {
         if (!mounted) return;
@@ -3742,13 +3543,10 @@ class _MatchesScreenState extends State<MatchesScreen> {
         return;
       }
 
-      final profileResponse = await Supabase.instance.client
-          .rpc(
-            'get_profiles_for_viewer',
-            params: {
-              'p_user_ids': matchIds,
-            },
-          );
+      final profileResponse = await Supabase.instance.client.rpc(
+        'get_profiles_for_viewer',
+        params: {'p_user_ids': matchIds},
+      );
 
       final loadedMatches = <Profile>[];
 
@@ -3792,11 +3590,9 @@ class _MatchesScreenState extends State<MatchesScreen> {
 
       setState(() => isLoading = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load matches.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to load matches.')));
     }
   }
 
@@ -3809,22 +3605,15 @@ class _MatchesScreenState extends State<MatchesScreen> {
     super.dispose();
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (matches.isEmpty) {
       return const Center(
-        child: Text(
-          'No matches yet.',
-          style: TextStyle(fontSize: 16),
-        ),
+        child: Text('No matches yet.', style: TextStyle(fontSize: 16)),
       );
     }
 
@@ -3857,9 +3646,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ProfileDetailScreen(
-                  profile: profile,
-                ),
+                builder: (_) => ProfileDetailScreen(profile: profile),
               ),
             );
           },
@@ -3868,29 +3655,20 @@ class _MatchesScreenState extends State<MatchesScreen> {
             backgroundImage: profile.imageUrl.isNotEmpty
                 ? NetworkImage(profile.imageUrl)
                 : null,
-            child: profile.imageUrl.isEmpty
-                ? const Icon(Icons.person)
-                : null,
+            child: profile.imageUrl.isEmpty ? const Icon(Icons.person) : null,
           ),
         ),
         title: Text(
           '${profile.name}, ${profile.age}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: profile.city.isNotEmpty
-            ? Text(profile.city)
-            : null,
+        subtitle: profile.city.isNotEmpty ? Text(profile.city) : null,
         trailing: IconButton(
-          icon: const Icon(
-            Icons.chat_bubble,
-            color: Color(0xFF6C5CE7),
-          ),
+          icon: const Icon(Icons.chat_bubble, color: Color(0xFF6C5CE7)),
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (_) => ChatScreen(profile: profile),
-              ),
+              MaterialPageRoute(builder: (_) => ChatScreen(profile: profile)),
             );
           },
         ),
@@ -3947,9 +3725,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       final matchResponse = await Supabase.instance.client
           .from('matches')
           .select('id, user_id, matched_user_id, created_at')
-          .or(
-            'user_id.eq.${user.id},matched_user_id.eq.${user.id}',
-          )
+          .or('user_id.eq.${user.id},matched_user_id.eq.${user.id}')
           .order('created_at', ascending: false);
 
       final matchIds = <String>[];
@@ -4034,8 +3810,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           'match_id': matchId,
           'profile': profile,
           'last_message': lastMessageMap[matchId]?['message'] as String?,
-          'last_message_at':
-              lastMessageMap[matchId]?['created_at'] as String?,
+          'last_message_at': lastMessageMap[matchId]?['created_at'] as String?,
           'unread_count': unreadCountMap[matchId] ?? 0,
         });
       }
@@ -4051,11 +3826,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
       setState(() => isLoading = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load chats.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed to load chats.')));
     }
   }
 
@@ -4076,15 +3848,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
 
     if (difference.inDays < 7) {
-      const days = [
-        'Mon',
-        'Tue',
-        'Wed',
-        'Thu',
-        'Fri',
-        'Sat',
-        'Sun',
-      ];
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       return days[date.weekday - 1];
     }
 
@@ -4123,11 +3887,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (chats.isEmpty) {
@@ -4139,10 +3899,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           ),
         ),
         body: const Center(
-          child: Text(
-            'No chats yet.',
-            style: TextStyle(fontSize: 16),
-          ),
+          child: Text('No chats yet.', style: TextStyle(fontSize: 16)),
         ),
       );
     }
@@ -4188,8 +3945,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     child: Text(
                       '${profile.name}${profile.age > 0 ? ', ${profile.age}' : ''}',
                       style: TextStyle(
-                        fontWeight:
-                            unreadCount > 0 ? FontWeight.bold : FontWeight.w600,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.w600,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -4203,8 +3961,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         color: unreadCount > 0
                             ? Theme.of(context).colorScheme.primary
                             : Colors.grey.shade600,
-                        fontWeight:
-                            unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: unreadCount > 0
+                            ? FontWeight.bold
+                            : FontWeight.normal,
                       ),
                     ),
                 ],
@@ -4216,8 +3975,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       lastMessage == null || lastMessage.isEmpty
                           ? 'No messages yet.'
                           : lastMessage.startsWith('image:')
-                              ? '📷 Photo'
-                              : lastMessage,
+                          ? '📷 Photo'
+                          : lastMessage,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -4256,9 +4015,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ChatScreen(
-                      profile: profile,
-                    ),
+                    builder: (_) => ChatScreen(profile: profile),
                   ),
                 );
               },
@@ -4277,10 +4034,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 class ChatScreen extends StatefulWidget {
   final Profile profile;
 
-  const ChatScreen({
-    super.key,
-    required this.profile,
-  });
+  const ChatScreen({super.key, required this.profile});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -4402,8 +4156,7 @@ class _ChatScreenState extends State<ChatScreen> {
           .onPresenceSync((payload) {
             if (!mounted) return;
 
-            final currentUserId =
-                Supabase.instance.client.auth.currentUser?.id;
+            final currentUserId = Supabase.instance.client.auth.currentUser?.id;
 
             if (currentUserId == null) return;
 
@@ -4446,9 +4199,7 @@ class _ChatScreenState extends State<ChatScreen> {
               value: matchId!,
             ),
             callback: (payload) async {
-
-              final newMessage =
-                  Map<String, dynamic>.from(payload.newRecord);
+              final newMessage = Map<String, dynamic>.from(payload.newRecord);
 
               final messageId = newMessage['id'];
 
@@ -4462,8 +4213,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
               scrollToLatest();
 
-              final currentUser =
-                  Supabase.instance.client.auth.currentUser;
+              final currentUser = Supabase.instance.client.auth.currentUser;
 
               if (currentUser != null &&
                   newMessage['sender_id']?.toString() != currentUser.id) {
@@ -4471,9 +4221,10 @@ class _ChatScreenState extends State<ChatScreen> {
                   await Supabase.instance.client
                       .from('messages')
                       .update({
-                    'delivered_at':
-                        DateTime.now().toUtc().toIso8601String(),
-                  })
+                        'delivered_at': DateTime.now()
+                            .toUtc()
+                            .toIso8601String(),
+                      })
                       .eq('id', messageId)
                       .isFilter('delivered_at', null);
                 } catch (_) {
@@ -4494,9 +4245,9 @@ class _ChatScreenState extends State<ChatScreen> {
               value: matchId!,
             ),
             callback: (payload) {
-
-              final updatedMessage =
-                  Map<String, dynamic>.from(payload.newRecord);
+              final updatedMessage = Map<String, dynamic>.from(
+                payload.newRecord,
+              );
               final messageId = updatedMessage['id'];
 
               final index = messages.indexWhere(
@@ -4524,8 +4275,9 @@ class _ChatScreenState extends State<ChatScreen> {
         messages
           ..clear()
           ..addAll(
-            (messageResponse as List)
-                .map((item) => Map<String, dynamic>.from(item)),
+            (messageResponse as List).map(
+              (item) => Map<String, dynamic>.from(item),
+            ),
           );
         isLoading = false;
       });
@@ -4538,11 +4290,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() => isLoading = false);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load chat.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed to load chat.')));
     }
   }
 
@@ -4586,10 +4335,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (user == null || typingChannel == null) return;
 
     try {
-      await typingChannel!.track({
-        'user_id': user.id,
-        'typing': typing,
-      });
+      await typingChannel!.track({'user_id': user.id, 'typing': typing});
     } catch (_) {
       // Typing status is optional and should not interrupt the chat.
     }
@@ -4609,19 +4355,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User blocked.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('User blocked.')));
 
       Navigator.pop(context);
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -4644,19 +4386,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Match removed.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Match removed.')));
 
       Navigator.pop(context);
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -4711,10 +4449,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           value: 'Fake profile',
                           child: Text('Fake profile'),
                         ),
-                        DropdownMenuItem(
-                          value: 'Other',
-                          child: Text('Other'),
-                        ),
+                        DropdownMenuItem(value: 'Other', child: Text('Other')),
                       ],
                       onChanged: (value) {
                         if (value != null) {
@@ -4767,17 +4502,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Report submitted.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Report submitted.')));
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -4806,17 +4537,14 @@ class _ChatScreenState extends State<ChatScreen> {
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send message.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to send message.')));
     }
   }
 
@@ -4847,11 +4575,11 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       final bytes = await image.readAsBytes();
-      final extension =
-          image.name.contains('.') ? image.name.split('.').last : 'jpg';
+      final extension = image.name.contains('.')
+          ? image.name.split('.').last
+          : 'jpg';
 
-      final fileName =
-          '${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.$extension';
 
       final filePath = '${user.id}/$fileName';
 
@@ -4878,23 +4606,18 @@ class _ChatScreenState extends State<ChatScreen> {
     } on StorageException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send image.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Failed to send image.')));
     } finally {
       if (mounted) {
         setState(() => isSendingImage = false);
@@ -4930,17 +4653,11 @@ class _ChatScreenState extends State<ChatScreen> {
     final start = selection.start;
     final end = selection.end;
 
-    final newText = text.replaceRange(
-      start,
-      end,
-      emoji,
-    );
+    final newText = text.replaceRange(start, end, emoji);
 
     messageController.value = TextEditingValue(
       text: newText,
-      selection: TextSelection.collapsed(
-        offset: start + emoji.length,
-      ),
+      selection: TextSelection.collapsed(offset: start + emoji.length),
     );
   }
 
@@ -4967,10 +4684,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return '$hour:$minute';
   }
 
-  Widget buildMessageBubble(
-    Map<String, dynamic> item,
-    String? currentUserId,
-  ) {
+  Widget buildMessageBubble(Map<String, dynamic> item, String? currentUserId) {
     final senderId = item['sender_id']?.toString();
     final isMe = senderId != null && senderId == currentUserId;
     final text = item['message'] as String? ?? '';
@@ -4989,14 +4703,9 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         padding: isImage
             ? const EdgeInsets.all(4)
-            : const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 9,
-              ),
+            : const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: isMe
-              ? const Color(0xFF6C5CE7)
-              : Colors.grey.shade200,
+          color: isMe ? const Color(0xFF6C5CE7) : Colors.grey.shade200,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(18),
             topRight: const Radius.circular(18),
@@ -5033,20 +4742,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
                   child: Image.network(
-                      imageUrlFromMessage(text),
+                    imageUrlFromMessage(text),
                     width: 230,
                     height: 230,
                     fit: BoxFit.cover,
-                    loadingBuilder:
-                        (context, child, loadingProgress) {
+                    loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
 
                       return const SizedBox(
-                      width: 230,
-                      height: 230,
-                      child: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                        width: 230,
+                        height: 230,
+                        child: Center(child: CircularProgressIndicator()),
                       );
                     },
                     errorBuilder: (context, error, stackTrace) {
@@ -5054,10 +4760,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         width: 230,
                         height: 230,
                         child: Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            size: 40,
-                          ),
+                          child: Icon(Icons.broken_image_outlined, size: 40),
                         ),
                       );
                     },
@@ -5065,17 +4768,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               )
             : Column(
-                crossAxisAlignment:
-                    isMe
-                        ? CrossAxisAlignment.end
-                        : CrossAxisAlignment.start,
+                crossAxisAlignment: isMe
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 children: [
                   Text(
                     text,
                     style: TextStyle(
-                      color: isMe
-                          ? Colors.white
-                          : Colors.black87,
+                      color: isMe ? Colors.white : Colors.black87,
                       fontSize: 15,
                     ),
                   ),
@@ -5086,9 +4786,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       Text(
                         formatTime(item['created_at']),
                         style: TextStyle(
-                          color: isMe
-                              ? Colors.white70
-                              : Colors.black45,
+                          color: isMe ? Colors.white70 : Colors.black45,
                           fontSize: 10,
                         ),
                       ),
@@ -5098,8 +4796,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           item['read_at'] != null
                               ? Icons.done_all
                               : item['delivered_at'] != null
-                                  ? Icons.done_all
-                                  : Icons.done,
+                              ? Icons.done_all
+                              : Icons.done,
                           size: 14,
                           color: item['read_at'] != null
                               ? Colors.lightBlueAccent
@@ -5120,17 +4818,12 @@ class _ChatScreenState extends State<ChatScreen> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: Colors.grey.shade300,
-          ),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey.shade300)),
       ),
       child: GridView.builder(
         padding: const EdgeInsets.all(10),
         itemCount: emojis.length,
-        gridDelegate:
-            const SliverGridDelegateWithFixedCrossAxisCount(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 8,
           childAspectRatio: 1,
         ),
@@ -5138,10 +4831,7 @@ class _ChatScreenState extends State<ChatScreen> {
           return InkWell(
             onTap: () => addEmoji(emojis[index]),
             child: Center(
-              child: Text(
-                emojis[index],
-                style: const TextStyle(fontSize: 27),
-              ),
+              child: Text(emojis[index], style: const TextStyle(fontSize: 27)),
             ),
           );
         },
@@ -5151,8 +4841,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId =
-        Supabase.instance.client.auth.currentUser?.id;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
 
     return Scaffold(
       appBar: AppBar(
@@ -5163,9 +4852,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ProfileDetailScreen(
-                      profile: widget.profile,
-                    ),
+                    builder: (_) =>
+                        ProfileDetailScreen(profile: widget.profile),
                   ),
                 );
               },
@@ -5181,10 +4869,7 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                widget.profile.name,
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(widget.profile.name, overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -5283,9 +4968,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
                 Expanded(
@@ -5300,20 +4983,12 @@ class _ChatScreenState extends State<ChatScreen> {
                       : ListView.builder(
                           controller: scrollController,
                           reverse: false,
-                          padding: const EdgeInsets.fromLTRB(
-                            12,
-                            16,
-                            12,
-                            12,
-                          ),
+                          padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
                           itemCount: messages.length,
                           itemBuilder: (context, index) {
                             final message = messages[index];
 
-                            return buildMessageBubble(
-                              message,
-                              currentUserId,
-                            );
+                            return buildMessageBubble(message, currentUserId);
                           },
                         ),
                 ),
@@ -5345,9 +5020,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
                         SizedBox(width: 8),
                         Text('Sending image...'),
@@ -5358,12 +5031,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 SafeArea(
                   top: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      8,
-                      6,
-                      8,
-                      8,
-                    ),
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -5382,11 +5050,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         IconButton(
                           tooltip: 'Send image',
-                          onPressed:
-                              isSendingImage ? null : sendImage,
-                          icon: const Icon(
-                            Icons.image_outlined,
-                          ),
+                          onPressed: isSendingImage ? null : sendImage,
+                          icon: const Icon(Icons.image_outlined),
                         ),
                         Expanded(
                           child: TextField(
@@ -5408,12 +5073,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               filled: true,
                               fillColor: Colors.grey.shade100,
                               border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(24),
+                                borderRadius: BorderRadius.circular(24),
                                 borderSide: BorderSide.none,
                               ),
-                              contentPadding:
-                                  const EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 11,
                               ),
@@ -5422,8 +5085,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                         const SizedBox(width: 6),
                         CircleAvatar(
-                          backgroundColor:
-                              const Color(0xFF6C5CE7),
+                          backgroundColor: const Color(0xFF6C5CE7),
                           child: IconButton(
                             onPressed: sendMessage,
                             color: Colors.white,
@@ -5512,9 +5174,8 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
         isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -5523,9 +5184,7 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load blocked users.'),
-        ),
+        const SnackBar(content: Text('Failed to load blocked users.')),
       );
     }
   }
@@ -5576,25 +5235,19 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User unblocked.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('User unblocked.')));
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to unblock user.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to unblock user.')));
     } finally {
       if (mounted) {
         setState(() {
@@ -5614,57 +5267,48 @@ class BlockedUsersScreenState extends State<BlockedUsersScreen> {
         ),
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : blockedUsers.isEmpty
-              ? const Center(
-                  child: Text('You have not blocked anyone.'),
-                )
-              : ListView.separated(
-                  itemCount: blockedUsers.length,
-                  separatorBuilder: (_, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final user = blockedUsers[index];
-                    final name = user['name'] as String? ?? 'Unknown';
-                    final city = user['city'] as String? ?? '';
-                    final avatarUrl = user['avatar_url'] as String?;
+          ? const Center(child: Text('You have not blocked anyone.'))
+          : ListView.separated(
+              itemCount: blockedUsers.length,
+              separatorBuilder: (_, index) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final user = blockedUsers[index];
+                final name = user['name'] as String? ?? 'Unknown';
+                final city = user['city'] as String? ?? '';
+                final avatarUrl = user['avatar_url'] as String?;
 
-                    return ListTile(
-                      leading: CircleAvatar(
-                        radius: 26,
-                        backgroundImage:
-                            avatarUrl != null && avatarUrl.isNotEmpty
-                                ? NetworkImage(avatarUrl)
-                                : null,
-                        child: avatarUrl == null || avatarUrl.isEmpty
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Text(
-                        name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: city.isEmpty ? null : Text(city),
-                      trailing: OutlinedButton(
-                        onPressed: _unblockingIds.contains(user['id'])
-                            ? null
-                            : () => unblockUser(user['id'] as String),
-                        child: _unblockingIds.contains(user['id'])
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('UNBLOCK'),
-                      ),
-                    );
-                  },
-                ),
+                return ListTile(
+                  leading: CircleAvatar(
+                    radius: 26,
+                    backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                        ? NetworkImage(avatarUrl)
+                        : null,
+                    child: avatarUrl == null || avatarUrl.isEmpty
+                        ? const Icon(Icons.person)
+                        : null,
+                  ),
+                  title: Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: city.isEmpty ? null : Text(city),
+                  trailing: OutlinedButton(
+                    onPressed: _unblockingIds.contains(user['id'])
+                        ? null
+                        : () => unblockUser(user['id'] as String),
+                    child: _unblockingIds.contains(user['id'])
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('UNBLOCK'),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -5709,9 +5353,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (response != null) {
         enabled = response['enabled'] as bool? ?? true;
       } else {
-        await Supabase.instance.client
-            .from('notification_settings')
-            .insert({
+        await Supabase.instance.client.from('notification_settings').insert({
           'user_id': user.id,
           'enabled': true,
         });
@@ -5731,9 +5373,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Gagal memuat pengaturan notifikasi.'),
-        ),
+        const SnackBar(content: Text('Gagal memuat pengaturan notifikasi.')),
       );
     }
   }
@@ -5750,8 +5390,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       if (value) {
-        final permissionGranted =
-            await NotificationService.instance.requestPermission();
+        final permissionGranted = await NotificationService.instance
+            .requestPermission();
 
         if (!permissionGranted) {
           if (!mounted) return;
@@ -5760,9 +5400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _notificationsEnabled = false;
           });
 
-          await Supabase.instance.client
-              .from('notification_settings')
-              .upsert({
+          await Supabase.instance.client.from('notification_settings').upsert({
             'user_id': user.id,
             'enabled': false,
             'updated_at': DateTime.now().toIso8601String(),
@@ -5771,20 +5409,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (!mounted) return;
 
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Izin notifikasi belum diberikan.',
-              ),
-            ),
+            const SnackBar(content: Text('Izin notifikasi belum diberikan.')),
           );
 
           return;
         }
       }
 
-      await Supabase.instance.client
-          .from('notification_settings')
-          .upsert({
+      await Supabase.instance.client.from('notification_settings').upsert({
         'user_id': user.id,
         'enabled': value,
         'updated_at': DateTime.now().toIso8601String(),
@@ -5801,11 +5433,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Gagal menyimpan pengaturan notifikasi.',
-          ),
-        ),
+        const SnackBar(content: Text('Gagal menyimpan pengaturan notifikasi.')),
       );
     }
   }
@@ -5818,27 +5446,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
     } on AuthException catch (e) {
       if (!context.mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Logout failed. Please try again.'),
-        ),
+        const SnackBar(content: Text('Logout failed. Please try again.')),
       );
     }
   }
+
   void showBlockDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -5855,11 +5479,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('User blocked.'),
-                ),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('User blocked.')));
             },
             child: const Text('BLOCK'),
           ),
@@ -5888,20 +5509,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   .eq("id", Supabase.instance.client.auth.currentUser!.id)
                   .maybeSingle(),
               builder: (context, snapshot) {
-                final avatarUrl = snapshot.data?["avatar_url"]?.toString() ?? "";
+                final avatarUrl =
+                    snapshot.data?["avatar_url"]?.toString() ?? "";
 
                 if (avatarUrl.isNotEmpty) {
-                  return CircleAvatar(
-                    backgroundImage: NetworkImage(avatarUrl),
-                  );
+                  return CircleAvatar(backgroundImage: NetworkImage(avatarUrl));
                 }
 
                 return const CircleAvatar(
                   backgroundColor: Color(0xFFE8E5FF),
-                  child: Icon(
-                    Icons.person,
-                    color: Color(0xFF6C5CE7),
-                  ),
+                  child: Icon(Icons.person, color: Color(0xFF6C5CE7)),
                 );
               },
             ),
@@ -5914,9 +5531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const ProfileScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
               );
             },
           ),
@@ -5928,63 +5543,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
               _notificationLoading
                   ? 'Loading...'
                   : _notificationsEnabled
-                      ? 'Notifications are enabled'
-                      : 'Notifications are disabled',
+                  ? 'Notifications are enabled'
+                  : 'Notifications are disabled',
             ),
             trailing: _notificationLoading
                 ? const SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Switch(
                     value: _notificationsEnabled,
                     onChanged: _updateNotificationSetting,
                   ),
           ),
-          
-                FutureBuilder<bool>(
-                  future: Supabase.instance.client
-                      .rpc('is_moderator')
-                      .then((value) => value == true)
-                      .catchError((_) => false),
-                  builder: (context, snapshot) {
-                    if (snapshot.data != true) {
-                      return const SizedBox.shrink();
-                    }
 
-                    return ListTile(
-                      leading: const Icon(
-                        Icons.admin_panel_settings_outlined,
-                      ),
-                      title: const Text(
-                        'Moderation Reports',
-                      ),
-                      subtitle: const Text(
-                        'Review and manage user reports.',
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const ModerationReportsScreen(),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
+          FutureBuilder<bool>(
+            future: Supabase.instance.client
+                .rpc('is_moderator')
+                .then((value) => value == true)
+                .catchError((_) => false),
+            builder: (context, snapshot) {
+              if (snapshot.data != true) {
+                return const SizedBox.shrink();
+              }
+
+              return ListTile(
+                leading: const Icon(Icons.admin_panel_settings_outlined),
+                title: const Text('Moderation Reports'),
+                subtitle: const Text('Review and manage user reports.'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const ModerationReportsScreen(),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: const Text('Privacy'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySettingsScreen())); },
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const PrivacySettingsScreen(),
+                ),
+              );
+            },
           ),
           ListTile(
             leading: const Icon(Icons.block),
@@ -5992,31 +5603,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const BlockedUsersScreen(),
-                ),
+                MaterialPageRoute(builder: (_) => const BlockedUsersScreen()),
               );
-          },
+            },
           ),
           const Divider(),
           ListTile(
-            leading: const Icon(
-              Icons.logout,
-              color: Colors.red,
-            ),
-            title: const Text(
-              'Log out',
-              style: TextStyle(color: Colors.red),
-            ),
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: const Text('Log out', style: TextStyle(color: Colors.red)),
             onTap: () => logout(context),
           ),
           const SizedBox(height: 30),
           Center(
             child: Text(
               'Go Fren v1.0.0',
-              style: TextStyle(
-                color: Colors.grey.shade500,
-              ),
+              style: TextStyle(color: Colors.grey.shade500),
             ),
           ),
         ],
@@ -6024,7 +5625,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
 
 // MY PROFILE
 // ============================================================
@@ -6078,11 +5678,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         loading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load profile.'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to load profile.')));
     }
   }
 
@@ -6101,9 +5699,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
       body: loading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: loadProfile,
               child: ListView(
@@ -6162,18 +5758,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 28),
                   const Text(
                     'About me',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     bio.isEmpty ? 'No bio yet.' : bio,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.5,
-                    ),
+                    style: const TextStyle(fontSize: 16, height: 1.5),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -6205,17 +5795,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 // EDIT PROFILE
 // ============================================================
 
-
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
 
   @override
-  State<PrivacySettingsScreen> createState() =>
-      PrivacySettingsScreenState();
+  State<PrivacySettingsScreen> createState() => PrivacySettingsScreenState();
 }
 
-class PrivacySettingsScreenState
-    extends State<PrivacySettingsScreen> {
+class PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool showProfile = true;
   bool showCity = true;
   bool allowNewMatches = true;
@@ -6235,9 +5822,7 @@ class PrivacySettingsScreenState
     try {
       final response = await Supabase.instance.client
           .from('privacy_settings')
-          .select(
-            'show_profile, show_city, allow_new_matches',
-          )
+          .select('show_profile, show_city, allow_new_matches')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -6247,13 +5832,10 @@ class PrivacySettingsScreenState
         setState(() {
           showProfile = response['show_profile'] as bool? ?? true;
           showCity = response['show_city'] as bool? ?? true;
-          allowNewMatches =
-              response['allow_new_matches'] as bool? ?? true;
+          allowNewMatches = response['allow_new_matches'] as bool? ?? true;
         });
       } else {
-        await Supabase.instance.client
-            .from('privacy_settings')
-            .insert({
+        await Supabase.instance.client.from('privacy_settings').insert({
           'user_id': user.id,
         });
       }
@@ -6268,9 +5850,8 @@ class PrivacySettingsScreenState
         isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
@@ -6279,9 +5860,7 @@ class PrivacySettingsScreenState
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to load privacy settings.'),
-        ),
+        const SnackBar(content: Text('Failed to load privacy settings.')),
       );
     }
   }
@@ -6295,9 +5874,7 @@ class PrivacySettingsScreenState
     if (user == null) return;
 
     try {
-      await Supabase.instance.client
-          .from('privacy_settings')
-          .upsert({
+      await Supabase.instance.client.from('privacy_settings').upsert({
         'user_id': user.id,
         column: value,
         'updated_at': DateTime.now().toIso8601String(),
@@ -6317,16 +5894,13 @@ class PrivacySettingsScreenState
     } on PostgrestException catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update privacy setting.'),
-        ),
+        const SnackBar(content: Text('Failed to update privacy setting.')),
       );
     }
   }
@@ -6341,9 +5915,7 @@ class PrivacySettingsScreenState
         ),
       ),
       body: isLoading
-          ? const Center(
-              child: CircularProgressIndicator(),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
                 SwitchListTile(
@@ -6356,10 +5928,7 @@ class PrivacySettingsScreenState
                   ),
                   value: showProfile,
                   onChanged: (value) {
-                    updateSetting(
-                      column: 'show_profile',
-                      value: value,
-                    );
+                    updateSetting(column: 'show_profile', value: value);
                   },
                 ),
                 const Divider(),
@@ -6368,15 +5937,10 @@ class PrivacySettingsScreenState
                     'Show my city',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: const Text(
-                    'Show your city on your profile.',
-                  ),
+                  subtitle: const Text('Show your city on your profile.'),
                   value: showCity,
                   onChanged: (value) {
-                    updateSetting(
-                      column: 'show_city',
-                      value: value,
-                    );
+                    updateSetting(column: 'show_city', value: value);
                   },
                 ),
                 const Divider(),
@@ -6385,15 +5949,10 @@ class PrivacySettingsScreenState
                     'Allow new matches',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  subtitle: const Text(
-                    'Allow other users to match with you.',
-                  ),
+                  subtitle: const Text('Allow other users to match with you.'),
                   value: allowNewMatches,
                   onChanged: (value) {
-                    updateSetting(
-                      column: 'allow_new_matches',
-                      value: value,
-                    );
+                    updateSetting(column: 'allow_new_matches', value: value);
                   },
                 ),
               ],
@@ -6469,11 +6028,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = Supabase.instance.client.auth.currentUser;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please log in first.'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Please log in first.')));
       return;
     }
 
@@ -6494,7 +6050,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
             );
 
-        avatarUrl = "${Supabase.instance.client.storage.from('avatars').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}";
+        avatarUrl =
+            "${Supabase.instance.client.storage.from('avatars').getPublicUrl(filePath)}?v=${DateTime.now().millisecondsSinceEpoch}";
       }
 
       final data = {
@@ -6507,28 +6064,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         data['avatar_url'] = avatarUrl;
       }
 
-      await Supabase.instance.client
-          .from('profiles')
-          .upsert({
-            'id': user.id,
-            ...data,
-          });
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user.id,
+        ...data,
+      });
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile saved successfully.'),
-        ),
+        const SnackBar(content: Text('Profile saved successfully.')),
       );
     } catch (e) {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save profile: $e'),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save profile: $e')));
     }
   }
 
@@ -6568,20 +6118,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                         )
                       : existingAvatarUrl != null &&
-                              existingAvatarUrl!.isNotEmpty
-                          ? ClipOval(
-                              child: Image.network(
-                                existingAvatarUrl!,
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.person,
-                              size: 65,
-                              color: Color(0xFF6C5CE7),
-                            ),
+                            existingAvatarUrl!.isNotEmpty
+                      ? ClipOval(
+                          child: Image.network(
+                            existingAvatarUrl!,
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.person,
+                          size: 65,
+                          color: Color(0xFF6C5CE7),
+                        ),
                 ),
                 Positioned(
                   right: 0,
@@ -6646,9 +6196,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               child: Text(
                 'SAVE PROFILE',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
           ),

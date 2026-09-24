@@ -3658,7 +3658,6 @@ class _MatchesScreenState extends State<MatchesScreen> {
           ),
           callback: (payload) async {
             await loadMatches();
-            await _showNewMatchNotification(payload);
           },
         )
         .onPostgresChanges(
@@ -3672,7 +3671,6 @@ class _MatchesScreenState extends State<MatchesScreen> {
           ),
           callback: (payload) async {
             await loadMatches();
-            await _showNewMatchNotification(payload);
           },
         )
         .subscribe();
@@ -3799,189 +3797,7 @@ class _MatchesScreenState extends State<MatchesScreen> {
     super.dispose();
   }
 
-  Future<void> _showNewMatchNotification(
-    PostgresChangePayload payload,
-  ) async {
-    final user = Supabase.instance.client.auth.currentUser;
 
-    if (user == null || !mounted) return;
-
-    final record = payload.newRecord;
-
-    final userId = record['user_id'] as String?;
-    final matchedUserId = record['matched_user_id'] as String?;
-
-    if (userId == null || matchedUserId == null) return;
-
-    final otherUserId =
-        userId == user.id ? matchedUserId : userId;
-
-    try {
-      final profileResponse = await Supabase.instance.client
-          .rpc(
-            'get_profiles_for_viewer',
-            params: {
-              'p_user_ids': [otherUserId],
-            },
-          );
-
-      final response = (profileResponse as List).isNotEmpty
-          ? profileResponse.first
-          : null;
-
-      if (response == null || !mounted) return;
-
-      final birthDateText = response['birth_date'] as String?;
-      final birthDate = birthDateText != null
-          ? DateTime.tryParse(birthDateText)
-          : null;
-
-      if (birthDate == null) return;
-
-      final now = DateTime.now();
-      var age = now.year - birthDate.year;
-
-      if (now.month < birthDate.month ||
-          (now.month == birthDate.month &&
-              now.day < birthDate.day)) {
-        age--;
-      }
-
-      final profile = Profile(
-        id: response['id'] as String,
-        name: response['name'] as String? ?? 'Unknown',
-        age: age,
-        city: response['city'] as String? ?? '',
-        bio: response['bio'] as String? ?? '',
-        imageUrl: response['avatar_url'] as String? ?? '',
-        interests: const [],
-      );
-
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            contentPadding: const EdgeInsets.fromLTRB(
-              24,
-              28,
-              24,
-              20,
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "IT'S A MATCH! 🎉",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF6C5CE7),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'You both liked each other.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                CircleAvatar(
-                  radius: 52,
-                  backgroundImage: profile.imageUrl.isNotEmpty
-                      ? NetworkImage(profile.imageUrl)
-                      : null,
-                  child: profile.imageUrl.isEmpty
-                      ? const Icon(
-                          Icons.person,
-                          size: 52,
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  '${profile.name}, ${profile.age}',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (profile.city.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    profile.city,
-                    style: const TextStyle(
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(dialogContext);
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatScreen(
-                            profile: profile,
-                          ),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF6C5CE7),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    child: const Text(
-                      'CHAT NOW',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: TextButton(
-                    onPressed: () {
-                      Navigator.pop(dialogContext);
-                    },
-                    child: const Text(
-                      'KEEP DISCOVERING',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    } catch (_) {
-      // Match exists even if the popup profile cannot be loaded.
-    }
-  }
 
   @override
   Widget build(BuildContext context) {

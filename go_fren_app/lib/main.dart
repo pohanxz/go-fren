@@ -3011,51 +3011,63 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
                                 ),
                               ),
                             ),
-                          profile.imageUrl.isNotEmpty
-                              ? Image.network(
-                                  profile.imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      decoration: const BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            Color(0xFFE8E5FF),
-                                            Color(0xFFD6D0FF),
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                      ),
-                                      child: const Center(
-                                        child: Icon(
-                                          Icons.person_rounded,
-                                          size: 110,
-                                          color: Color(0xFF6C5CE7),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Color(0xFFE8E5FF),
-                                        Color(0xFFD6D0FF),
-                                      ],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: Icon(
-                                      Icons.person_rounded,
-                                      size: 110,
-                                      color: Color(0xFF6C5CE7),
-                                    ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProfileDetailScreen(
+                                    profile: profile,
                                   ),
                                 ),
+                              );
+                            },
+                            child: profile.imageUrl.isNotEmpty
+                                ? Image.network(
+                                    profile.imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              Color(0xFFE8E5FF),
+                                              Color(0xFFD6D0FF),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          ),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.person_rounded,
+                                            size: 110,
+                                            color: Color(0xFF6C5CE7),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Color(0xFFE8E5FF),
+                                          Color(0xFFD6D0FF),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.person_rounded,
+                                        size: 110,
+                                        color: Color(0xFF6C5CE7),
+                                      ),
+                                    ),
+                                  ),
+                          ),
                           Container(
                             decoration: const BoxDecoration(
                               gradient: LinearGradient(
@@ -3840,14 +3852,26 @@ class _MatchesScreenState extends State<MatchesScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         contentPadding: const EdgeInsets.all(10),
-        leading: CircleAvatar(
-          radius: 30,
-          backgroundImage: profile.imageUrl.isNotEmpty
-              ? NetworkImage(profile.imageUrl)
-              : null,
-          child: profile.imageUrl.isEmpty
-              ? const Icon(Icons.person)
-              : null,
+        leading: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfileDetailScreen(
+                  profile: profile,
+                ),
+              ),
+            );
+          },
+          child: CircleAvatar(
+            radius: 30,
+            backgroundImage: profile.imageUrl.isNotEmpty
+                ? NetworkImage(profile.imageUrl)
+                : null,
+            child: profile.imageUrl.isEmpty
+                ? const Icon(Icons.person)
+                : null,
+          ),
         ),
         title: Text(
           '${profile.name}, ${profile.age}',

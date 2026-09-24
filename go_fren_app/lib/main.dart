@@ -5917,36 +5917,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
   }
-
-  void showReportDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Report a user'),
-        content: const Text(
-          'Choose this option if a profile violates Go Fren community rules.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Report submitted.'),
-                ),
-              );
-            },
-            child: const Text('REPORT'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void showBlockDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -6069,11 +6039,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               );
           },
-          ),
-          ListTile(
-            leading: const Icon(Icons.flag_outlined),
-            title: const Text('Report a user'),
-            onTap: () => showReportDialog(context),
           ),
           const Divider(),
           ListTile(

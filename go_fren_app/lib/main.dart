@@ -396,40 +396,45 @@ class _GoFrenAppState extends State<GoFrenApp> {
   }
 }
 
-Future<void> updateCurrentUserLocation() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+Future<bool> updateCurrentUserLocation() async {
+  final user = Supabase.instance.client.auth.currentUser;
+  if (user == null) return false;
 
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+  try {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
 
-      var permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-
-      await Supabase.instance.client.from('user_locations').upsert({
-        'user_id': user.id,
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      });
-    } catch (_) {
-      // Location is optional and should not interrupt the app.
+    if (!serviceEnabled) {
+      return false;
     }
+
+    var permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return false;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+      ),
+    );
+
+    await Supabase.instance.client.from('user_locations').upsert({
+      'user_id': user.id,
+      'latitude': position.latitude,
+      'longitude': position.longitude,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    });
+
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // ============================================================
@@ -1962,7 +1967,30 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
 
   Future<void> _initializeDiscovery() async {
     await loadDiscoveryPreferences();
-    await updateCurrentUserLocation();
+
+    final locationReady = await updateCurrentUserLocation();
+
+    if (!locationReady) {
+      if (!mounted) return;
+
+      setState(() {
+        profiles = [];
+        currentProfile = 0;
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Location is required for Discovery. Please enable location permission and GPS.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+      return;
+    }
+
     await loadProfiles();
   }
 
@@ -2281,7 +2309,27 @@ class _DiscoveryScreenState extends State<DiscoveryScreen> {
     });
 
     try {
-      await updateCurrentUserLocation();
+      final locationReady = await updateCurrentUserLocation();
+
+      if (!locationReady) {
+        if (!mounted) return;
+
+        setState(() {
+          isLoading = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Location is required for Discovery. Please enable location permission and GPS.',
+            ),
+            duration: Duration(seconds: 4),
+          ),
+        );
+
+        return;
+      }
+
       await loadProfiles();
     } catch (_) {
       if (!mounted) return;
